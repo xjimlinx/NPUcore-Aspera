@@ -3,7 +3,8 @@ U_FAT32_DIR="../easy-fs-fuse"
 U_FAT32=$1
 BLK_SZ="512"
 TARGET=riscv64gc-unknown-none-elf
-MODE="release"
+MODE="debug"
+# 如果参数数量大于2（实际上在Makefile里面调用这个脚本的时候参数数量是3）
 if [ $# -ge 2 ]; then
     if [ "$2"="2k500" -o "$2"="laqemu" ]
     then

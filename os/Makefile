@@ -61,7 +61,6 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show |grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-# build: env $(KERNEL_BIN) $(FS_IMG) fat32
 all: user remake-qemu-flash-fat-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
@@ -79,17 +78,18 @@ c-user:
 	@cd ../user && make c-user BOARD=$(BOARD) MODE=$(MODE)
 rust-user: env
 	@cd ../user && make rust-user BOARD=$(BOARD) MODE=$(MODE)
+
 # dev/zero永远输出0
 sdcard:
-    ifeq ($(findstring WSL, $(shell uname -a)), )
+ifeq ($(findstring WSL, $(shell uname -a)), )
 		@echo "Are you sure write to $(SDCARD) ? \nYou may also specify another drive with the option \`SDCARD=/dev/<drive>\` [y/N] " && read ans && [ $${ans:-N} = y ]
 		./buildfs.sh "$(SDCARD)" "qemu" $(MODE)
-    else
+else
 		@echo "Are you sure write to E:/ ? [y/N] " && read ans && [ $${ans:-N} = y ]
 		@sudo mount $(U_FAT32_DIR)/$(FAT32_IMG_NAME) $(U_FAT32_DIR)/fs
 		@powershell.exe 'cd $(U_FAT32_DIR); copy -Recurse -path "$$(pwd)/fs/*" -destination "E:/" -force'
 		@sudo umount $(U_FAT32_DIR)/fs
-    endif
+endif
 
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) $@ --strip-all -O binary &
@@ -112,13 +112,14 @@ endif
 
 remake-qemu-flash-fat-img: fat32 qemu-flash-fat-img
 
+
 qemu-flash-fat-img:
 ifeq ($(BOARD), 2k500)
 	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
 else ifeq ($(BOARD), laqemu)
 	@./la_fat $(QEMU_2K500)
+	@echo QEMU_2K500
 endif
-
 
 src-linker.ld: .FORCE
 	-@rm src/linker.ld
@@ -126,15 +127,16 @@ src-linker.ld: .FORCE
 
 fsimg-format:
 	sudo mkfs.vfat -F 32 ${U_FAT32}
+
 update-usr:user fat32
 
 kernel: src-linker.ld
 	@echo Platform: $(BOARD)
-    ifeq ($(MODE), debug)
+ifeq ($(MODE), debug)
 		@cargo build --no-default-features --features "board_$(BOARD) $(LOG_OPTION)" --target $(TARGET)
-    else
+else
 		@cargo build --no-default-features --release --features "board_$(BOARD) $(LOG_OPTION)"  --target $(TARGET)
-    endif
+endif
 
 clean:
 	@cargo clean
@@ -149,6 +151,7 @@ run: env run-inner
 run-inner: build do-run
 
 runsimple: do-run
+
 do-run:
 #First, link the image into the directory.
 ifeq ($(BOARD), laqemu)
@@ -160,7 +163,6 @@ else ifeq ($(BOARD), 2k500)
 	@./run_script $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
 endif
 
-
 new-gdb: build gdb
 gdb:
 ifeq ($(BOARD),laqemu)
@@ -169,10 +171,6 @@ else ifeq ($(BOARD), 2k500)
 	@./la_gdbserver minicom -D $(LA_DEBUGGER_PORT_FREQ)
 endif
 
-
-# os-doc:
-# 	cargo doc --no-deps --release --target riscv64gc-unknown-none-elf --document-private-items
-# 	@./clear_doc.sh os
 ch-default:
 	@DEFAULT_STR=$$(grep -o "default[[:space:]]*=[[:space:]]\[[[:space:]]*\"board_.\+\"[[:space:]]*\]" Cargo.toml);
 	@if [ $$(echo "$$DEFAULT_STR"|grep "qemu") ]; then echo "found"; else echo "not found"; fi;
