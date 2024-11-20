@@ -61,7 +61,7 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show |grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-all: clean user remake-qemu-flash-fat-img run
+all: user remake-qemu-flash-fat-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
