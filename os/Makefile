@@ -65,7 +65,7 @@ all: user remake-qemu-flash-fat-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
-	if [ "$(dpkg --list|grep "ii[[:space:]]*expect")"="" ];then true;else sudo apt install expect;fi
+	if [ "$(dpkg --list|grep "ii[[:space:]]*expect")"="" ];then true;else sudo pacman install expect;fi
 ifneq ($(ARCH), loongarch64)
 #	-cargo install cargo-binutils --vers ~0.2
 endif
@@ -98,7 +98,7 @@ $(KERNEL_BIN): kernel
 ifeq ($(ARCH), loongarch64)
 	../util/mkimage -A loongarch -O linux -T kernel -C none -a $(LA_LOAD_ADDR) -e $(LA_ENTRY_POINT) -n NPUcore+ -d $(KERNEL_BIN) $(KERNEL_UIMG)
 	-@sudo rm $(U_IMG)
-	@sudo cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
+	@cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
 endif
 	-@rm src/linker.ld
 #	@$(OBJDUMP) -SC $(KERNEL_ELF) > $(KERNEL_ELF).S
@@ -132,9 +132,9 @@ update-usr:user fat32
 kernel: src-linker.ld
 	@echo Platform: $(BOARD)
 ifeq ($(MODE), debug)
-		@cargo build --no-default-features --features "board_$(BOARD) $(LOG_OPTION)" --target $(TARGET)
+	@cargo build --no-default-features --features "board_$(BOARD) $(LOG_OPTION)" --target $(TARGET)
 else
-		@cargo build --no-default-features --release --features "board_$(BOARD) $(LOG_OPTION)"  --target $(TARGET)
+	@cargo build --no-default-features --release --features "board_$(BOARD) $(LOG_OPTION)"  --target $(TARGET)
 endif
 
 clean:
