@@ -19,7 +19,6 @@ if [ $# -ge 3 ]; then
     MODE="$3"
 fi
 
-
 ARCH=$(echo "${TARGET}" | cut -d- -f1| grep -o '[a-zA-Z]\+[0-9]\+')
 echo
 echo Current arch: ${ARCH}
@@ -40,7 +39,7 @@ fi
 "$SUDO" mkdir ${U_FAT32_DIR}/fs
 
 "$SUDO" mount -f ${U_FAT32} ${U_FAT32_DIR}/fs
-if [ $? ]
+if [ $? -ne 0 ]
 then
     "$SUDO" umount ${U_FAT32}
 fi
@@ -48,7 +47,7 @@ fi
 
 # build root
 "$SUDO" mkdir -p ${U_FAT32_DIR}/fs/lib
-"$SUDO" cp ../user/lib/${ARCH}/libc.so ${U_FAT32_DIR}/fs/lib
+# "$SUDO" cp ../user/lib/${ARCH}/libc.so ${U_FAT32_DIR}/fs/lib
 "$SUDO" mkdir -p ${U_FAT32_DIR}/fs/etc
 "$SUDO" mkdir -p ${U_FAT32_DIR}/fs/bin
 "$SUDO" mkdir -p ${U_FAT32_DIR}/fs/root
@@ -80,8 +79,8 @@ fi
 
 try_copy ../user/user_C_program/user/build/${ARCH}  ${U_FAT32_DIR}/fs/syscall
 try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_FAT32_DIR}/fs/
-try_copy ../user/disk/${ARCH} ${U_FAT32_DIR}/fs/
+# try_copy ../user/disk/${ARCH} ${U_FAT32_DIR}/fs/
 
 "$SUDO" umount ${U_FAT32_DIR}/fs
 echo "DONE"
-# return 0
+exit 0

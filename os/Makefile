@@ -7,7 +7,7 @@ KERNEL_ELF = target/$(TARGET)/$(MODE)/os
 KERNEL_BIN = $(KERNEL_ELF).bin
 KERNEL_UIMG = $(KERNEL_ELF).ui
 
-ARCH=${shell echo ${TARGET}|cut -d- -f1 |grep -o "^[a-zA-Z]\+[[:digit:]]*"}
+ARCH=${shell echo ${TARGET}|cut -d- -f1 | grep -o "^[a-zA-Z]\+[[:digit:]]*"}
 # BOARD
 BOARD ?= laqemu
 LDBOARD = la2k500
@@ -58,14 +58,14 @@ MINITERM_START_CMD=python3 -m serial.tools.miniterm --dtr 0 --rts 0 --filter dir
 LA_ENTRY_POINT = 0x9000000000000000
 LA_LOAD_ADDR = 0x9000000000000000
 
-RUST_LA_TOOLCHAIN = $(shell rustup show |grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
+RUST_LA_TOOLCHAIN = $(shell rustup show | grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
 all: user remake-qemu-flash-fat-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
-	if [ "$(dpkg --list|grep "ii[[:space:]]*expect")"="" ];then true;else sudo pacman install expect;fi
+	if [ "$(dpkg --list| grep "ii[[:space:]]*expect")"="" ];then true;else sudo pacman install expect;fi
 ifneq ($(ARCH), loongarch64)
 #	-cargo install cargo-binutils --vers ~0.2
 endif
@@ -170,7 +170,7 @@ endif
 
 ch-default:
 	@DEFAULT_STR=$$(grep -o "default[[:space:]]*=[[:space:]]\[[[:space:]]*\"board_.\+\"[[:space:]]*\]" Cargo.toml);
-	@if [ $$(echo "$$DEFAULT_STR"|grep "qemu") ]; then echo "found"; else echo "not found"; fi;
+	@if [ $$(echo "$$DEFAULT_STR"| grep "qemu") ]; then echo "found"; else echo "not found"; fi;
 
 # test_addr:
 # 	@echo "ENT" $(LA_ENTRY_POINT) "\nld " $(LA_LOAD_ADDR)
