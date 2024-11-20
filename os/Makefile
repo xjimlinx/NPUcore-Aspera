@@ -1,6 +1,6 @@
 # Building
 TARGET := loongarch64-unknown-linux-gnu
-MODE := debug
+MODE ?= debug
 CORE_NUM := 1
 
 KERNEL_ELF = target/$(TARGET)/$(MODE)/os
@@ -39,12 +39,9 @@ endif
 
 IMG_DIR := ../easy-fs-fuse
 FAT32_IMG_LA = rootfs-ubifs-ze.img
+FAT32_IMG_NAME ?= $(FAT32_IMG_LA)
 U_FAT32_DIR := $(IMG_DIR)
-FAT32_IMG_NAME := $(FAT32_IMG_RV)
-ifeq ($(ARCH), loongarch64)
-	FAT32_IMG_NAME = $(FAT32_IMG_LA)
-endif
-U_FAT32 := ${U_FAT32_DIR}/$(FAT32_IMG_NAME)	
+U_FAT32 := ${U_FAT32_DIR}/$(FAT32_IMG_NAME)
 FAT32_2K500_LN = $(shell readlink -f $(U_FAT32_DIR))/$(FAT32_IMG_LA)
 
 QEMU_2K500_DIR=../util/qemu-2k500/gz
@@ -56,7 +53,7 @@ LA_DEBUGGER_SERIAL_PORT = $$(python3 -m serial.tools.list_ports 1A86:7523 -q | h
 LA_DEBUGGER_PORT_FREQ = $(LA_DEBUGGER_SERIAL_PORT) 115200
 LA_2K500_SERIAL_PORT = $$(python3 -m serial.tools.list_ports 067B:2303 -q | head -n 1)
 LA_2K500_PORT_FREQ = $(LA_2K500_SERIAL_PORT) 115200
-MINITERM_START_CMD=python3 -m serial.tools.miniterm --dtr 0 --rts 0 --filter direct 
+MINITERM_START_CMD=python3 -m serial.tools.miniterm --dtr 0 --rts 0 --filter direct
 
 LA_ENTRY_POINT = 0x9000000000000000
 LA_LOAD_ADDR = 0x9000000000000000
@@ -93,14 +90,15 @@ sdcard:
 		@powershell.exe 'cd $(U_FAT32_DIR); copy -Recurse -path "$$(pwd)/fs/*" -destination "E:/" -force'
 		@sudo umount $(U_FAT32_DIR)/fs
     endif
+
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) $@ --strip-all -O binary &
-	@$(OBJDUMP) $(KERNEL_ELF) -SC > target/$(TARGET)/$(MODE)/asm_all.txt 
+	@$(OBJDUMP) $(KERNEL_ELF) -SC > target/$(TARGET)/$(MODE)/asm_all.txt
 	@$(READELF) -ash $(KERNEL_ELF) > target/$(TARGET)/$(MODE)/sec.txt &
 ifeq ($(ARCH), loongarch64)
 	../util/mkimage -A loongarch -O linux -T kernel -C none -a $(LA_LOAD_ADDR) -e $(LA_ENTRY_POINT) -n NPUcore+ -d $(KERNEL_BIN) $(KERNEL_UIMG)
-	-@rm $(U_IMG)
-	@cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
+	-@sudo rm $(U_IMG)
+	@sudo cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
 endif
 	-@rm src/linker.ld
 #	@$(OBJDUMP) -SC $(KERNEL_ELF) > $(KERNEL_ELF).S
@@ -122,15 +120,15 @@ else ifeq ($(BOARD), laqemu)
 endif
 
 
-src/linker.ld: .FORCE
+src-linker.ld: .FORCE
 	-@rm src/linker.ld
-	cpp -P $(LA_2K500_DISABLE_EH_FRAME) -D $(LDBOARD) src/linker.in.ld $@
+	@cpp -P $(LA_2K500_DISABLE_EH_FRAME) -D $(LDBOARD) src/linker.in.ld -o src/linker.ld
 
 fsimg-format:
 	sudo mkfs.vfat -F 32 ${U_FAT32}
 update-usr:user fat32
 
-kernel: src/linker.ld
+kernel: src-linker.ld
 	@echo Platform: $(BOARD)
     ifeq ($(MODE), debug)
 		@cargo build --no-default-features --features "board_$(BOARD) $(LOG_OPTION)" --target $(TARGET)
@@ -140,9 +138,9 @@ kernel: src/linker.ld
 
 clean:
 	@cargo clean
-	-@rm src/linker.ld
-	-@rm ../easy-fs-fuse/uImage
-	-@rm ../easy-fs-fuse/rootfs-ubifs-ze.img
+	-@sudo rm src/linker.ld
+	-@sudo rm ../easy-fs-fuse/uImage
+	-@sudo rm ../easy-fs-fuse/rootfs-ubifs-ze.img
 	-@cd ../user && make clean
 
 run: env run-inner
@@ -151,8 +149,6 @@ run-inner: build do-run
 
 runsimple: do-run
 do-run:
-#	-ln -s $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)
-#	echo $(FAT32_2K500_LN)
 #First, link the image into the directory.
 ifeq ($(BOARD), laqemu)
 	-ln -s $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)

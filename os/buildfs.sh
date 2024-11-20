@@ -23,14 +23,14 @@ ARCH=$(echo "${TARGET}" | cut -d- -f1| grep -o '[a-zA-Z]\+[0-9]\+')
 echo
 echo Current arch: ${ARCH}
 echo
-touch ${U_FAT32}
+"$SUDO" touch ${U_FAT32}
 "$SUDO" dd if=/dev/zero of=${U_FAT32} bs=1M count=128
 echo Making fat32 imgage with BLK_SZ=${BLK_SZ}
 "$SUDO" mkfs.vfat -F 32 ${U_FAT32} -S ${BLK_SZ}
 "$SUDO" fdisk -l ${U_FAT32}
 
 if test -e ${U_FAT32_DIR}/fs
-then 
+then
     "$SUDO" rm -r ${U_FAT32_DIR}/fs
 fi
 

@@ -1,13 +1,8 @@
-# 项目简介
-
-&emsp;&emsp;欢迎来到NPUcore+ LA的项目主页， 本项目是基于2022年操作系统大赛内核赛一等奖作品NPUcore面向LA平台进行移植的结果。目前在QEMU上已经支持lua, busybox, lmbench和部分系统调用测例， 后续还计划添加2k500实机开发板的更多测例支持。
-
 # 基础环境配置
 1. make、Cmake安装（辅助编译工具）
 执行：
-``` shell
-sudo apt-get install make
-sudo apt-get install cmake
+``` bash
+sudo pacman -S make cmake
 ```
 
 2. 安装rust对LoongArch的编译链
@@ -20,11 +15,11 @@ sudo apt-get install cmake
         百度网盘链接: https://pan.baidu.com/s/1xHriNdgcNzzn-X9U73sHlw 提取码: 912v   
         下载完成后，首先将本压缩包解压后，放至`/opt`目录下;
         然后，将本文件夹引入环境变量，在`~/.bashrc`中添加
-        ``` shell
+        ``` bash
         export PATH="$PATH:/opt/cross-my/bin"
         ```
         最后，执行如下命令来更新环境变量。
-        ``` shell
+        ``` bash
         source ~/.bashrc
         ```
         
@@ -33,10 +28,10 @@ sudo apt-get install cmake
    建议尝试`make clean`后， 删除对应文件夹的Cargo.lock， 尝试在Cargo.toml中删除版本限制再重新编译。
 
 # 文档信息
-&emsp;&emsp;目前除了README， 还有开发文档： 见 Doc/dbg/dbg.pdf, 其中包含了本操作系统移植过程中的各项debug过程。
-&emsp;&emsp;Doc/mm.pdf, 其中包含了本操作系统移植过程中的内存布局的思路和技术细节。
-&emsp;&emsp;Doc/nand.pdf, 其中包含了NAND驱动移植过程中的内存布局的思路和技术细节。
-&emsp;&emsp;Doc/start.pdf, 其中包含了本操作系统移植过程中启动相关的原理和技术细节。
+目前除了README， 还有开发文档： 见 Doc/dbg/dbg.pdf, 其中包含了本操作系统移植过程中的各项debug过程。
++ Doc/mm.pdf, 其中包含了本操作系统移植过程中的内存布局的思路和技术细节。
++ Doc/nand.pdf, 其中包含了NAND驱动移植过程中的内存布局的思路和技术细节。
++ Doc/start.pdf, 其中包含了本操作系统移植过程中启动相关的原理和技术细节。
 
 # 运行方式与运行效果
 `cd os && make`即可。 第一次运行推荐先执行一遍从而方便环境的安装和熟悉。
