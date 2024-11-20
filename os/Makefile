@@ -138,6 +138,7 @@ kernel: src-linker.ld
 
 clean:
 	@cargo clean
+	@mkdir -p ../easy-fs-fuse
 	-@sudo rm src/linker.ld
 	-@sudo rm ../easy-fs-fuse/uImage
 	-@sudo rm ../easy-fs-fuse/rootfs-ubifs-ze.img
