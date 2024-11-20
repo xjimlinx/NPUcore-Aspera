@@ -45,10 +45,6 @@
 ```bash
 cd os
 make clean
-make user
-make fat32
-make kernel
-make build
 make run
 ```
 
