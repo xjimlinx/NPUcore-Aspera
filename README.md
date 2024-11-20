@@ -47,8 +47,6 @@
 ```bash
 cd os
 make all MODE=release
-# 第一次会出错 (not yet fixed)
-make all MODE=release
 ```
 
 # Makefile可用选项相关解释
