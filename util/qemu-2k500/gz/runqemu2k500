@@ -1,6 +1,6 @@
 #!/bin/sh
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
-ln -s "$SCRIPTPATH"/../tmp/qemu /tmp
+ln -sf "$SCRIPTPATH"/../tmp/qemu /tmp
 BIOS="$SCRIPTPATH"/u-boot-with-spl.bin
 #BIOS=./u-boot.bin
 truncate -s 1M $BIOS

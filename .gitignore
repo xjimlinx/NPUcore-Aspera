@@ -2,10 +2,8 @@
 os/Cargo.lock
 user/Cargo.lock
 os/src/linker.ld
-os/new_cmd
 
-# IDE config
-.idea/
+# vscode config
 .vscode/
 
 # kernel build
@@ -18,22 +16,13 @@ user/target/
 # Gathering place of images
 easy-fs-fuse/
 
-# a copy of user programs debug build in "user/target/*"(for gdb)
-os/user/
-
-#gdb script
-os/gdb_script
-
-# developing, should be invisible in main branch
-os/src/fs/fatfs/*
-
 # unsorted
 os/output.txt
 os/logs/
 os/src/link_app.S
 os/last-*
-tools/
 user/.ccls-cache/
+util/qemu-2k500/gz
 
 # Doc .org & .tex
 Doc/**/*.org

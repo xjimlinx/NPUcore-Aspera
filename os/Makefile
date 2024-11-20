@@ -110,7 +110,7 @@ else
 	./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" 2k500 $(MODE)
 endif
 
-remake-qemu-flash-fat-img: fat32 qemu-flash-fat-img
+remake-qemu-flash-fat-img: fat32 .WAIT qemu-flash-fat-img
 
 
 qemu-flash-fat-img:
@@ -140,10 +140,9 @@ endif
 
 clean:
 	@cargo clean
+	@sudo rm -rf ../easy-fs-fuse
 	@mkdir -p ../easy-fs-fuse
 	-@sudo rm src/linker.ld
-	-@sudo rm ../easy-fs-fuse/uImage
-	-@sudo rm ../easy-fs-fuse/rootfs-ubifs-ze.img
 	-@cd ../user && make clean
 
 run: env run-inner
@@ -155,7 +154,7 @@ runsimple: do-run
 do-run:
 #First, link the image into the directory.
 ifeq ($(BOARD), laqemu)
-	-ln -s $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)
+	ln -sf $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)
 	@echo "========WARNING!========"
 	@echo "The next command is expecting a modified runqemu2k500 script where any potential and implicit \"current working directory\" has been replaced by a generated script storage path."
 	@./run_script $(QEMU_2K500)
