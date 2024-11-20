@@ -26,11 +26,11 @@ echo Current arch: ${ARCH}
 echo
 
 mkdir -p ${U_FAT32_DIR}
-"$SUDO" touch ${U_FAT32}
-"$SUDO" dd if=/dev/zero of=${U_FAT32} bs=1M count=128
+touch ${U_FAT32}
+dd if=/dev/zero of=${U_FAT32} bs=1M count=128
 echo Making fat32 imgage with BLK_SZ=${BLK_SZ}
-"$SUDO" mkfs.vfat -F 32 ${U_FAT32} -S ${BLK_SZ}
-"$SUDO" fdisk -l ${U_FAT32}
+mkfs.vfat -F 32 ${U_FAT32} -S ${BLK_SZ}
+fdisk -l ${U_FAT32}
 
 if test -e ${U_FAT32_DIR}/fs
 then
