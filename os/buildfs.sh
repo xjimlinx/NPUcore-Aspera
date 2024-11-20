@@ -24,6 +24,8 @@ ARCH=$(echo "${TARGET}" | cut -d- -f1| grep -o '[a-zA-Z]\+[0-9]\+')
 echo
 echo Current arch: ${ARCH}
 echo
+
+mkdir -p ${U_FAT32_DIR}
 "$SUDO" touch ${U_FAT32}
 "$SUDO" dd if=/dev/zero of=${U_FAT32} bs=1M count=128
 echo Making fat32 imgage with BLK_SZ=${BLK_SZ}

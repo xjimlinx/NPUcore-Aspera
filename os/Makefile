@@ -61,7 +61,7 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show |grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-all: user remake-qemu-flash-fat-img run
+all: clean user remake-qemu-flash-fat-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
@@ -112,7 +112,6 @@ endif
 
 remake-qemu-flash-fat-img: fat32 .WAIT qemu-flash-fat-img
 
-
 qemu-flash-fat-img:
 ifeq ($(BOARD), 2k500)
 	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
@@ -141,8 +140,7 @@ endif
 clean:
 	@cargo clean
 	@sudo rm -rf ../easy-fs-fuse
-	@mkdir -p ../easy-fs-fuse
-	-@sudo rm src/linker.ld
+	@sudo rm -f src/linker.ld
 	-@cd ../user && make clean
 
 run: env run-inner
