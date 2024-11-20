@@ -10,9 +10,11 @@
 2. 安装rust对LoongArch的编译链
    
    + 安装rustup（rust的安装器+版本管理器）
+   
    + 安装Rust工具链
        由于LoongArch架构的交叉编译Rust工具链已经合并到上游， 目前不需要我们手动安装。  
        在 `Makefile` 中有自动的检测脚本， 只需要后续的make命令即可。
+   
    + 安装交叉编译工具。本项目使用的为在x86_64下编译产生loongarch64的编译工具。  
        LoongArch GCC 12:    
        百度网盘链接: https://pan.baidu.com/s/1xHriNdgcNzzn-X9U73sHlw 提取码: 912v   
@@ -44,8 +46,9 @@
 
 ```bash
 cd os
-make clean
-make run
+make all MODE=release
+# 第一次会出错 (not yet fixed)
+make all MODE=release
 ```
 
 # Makefile可用选项相关解释
