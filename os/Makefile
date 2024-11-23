@@ -37,12 +37,21 @@ ifndef LOG
 	LOG_OPTION := "log_off"
 endif
 
+# Filesystem
 IMG_DIR := ../easy-fs-fuse
+FS_MODE ?= fat32
+
 FAT32_IMG_LA = rootfs-ubifs-ze.img
 FAT32_IMG_NAME ?= $(FAT32_IMG_LA)
 U_FAT32_DIR := $(IMG_DIR)
 U_FAT32 := ${U_FAT32_DIR}/$(FAT32_IMG_NAME)
 FAT32_2K500_LN = $(shell readlink -f $(U_FAT32_DIR))/$(FAT32_IMG_LA)
+
+EXT4_IMG_LA = rootfs-ubifs-ze.img
+EXT4_IMG_NAME ?= $(EXT4_IMG_LA)
+U_EXT4_DIR := $(IMG_DIR)
+U_EXT4 := ${U_EXT4_DIR}/$(EXT4_IMG_NAME)
+EXT4_2K500_LN = $(shell readlink -f $(U_EXT4_DIR))/$(EXT4_IMG_LA)
 
 QEMU_2K500_DIR=../util/qemu-2k500/gz
 QEMU_2K500=$(QEMU_2K500_DIR)/runqemu2k500
@@ -61,7 +70,7 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show | grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-all: user remake-qemu-flash-fat-img run
+all: user remake-qemu-flash-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
@@ -103,20 +112,42 @@ endif
 	-@rm src/linker.ld
 #	@$(OBJDUMP) -SC $(KERNEL_ELF) > $(KERNEL_ELF).S
 
-fat32:
-ifneq ($(BOARD),2k500)
-	./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" "laqemu" $(MODE)
+fs-img:
+ifeq ($(BOARD), 2k500)
+ifeq ($(FS_MODE), fat32)
+	@./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" "la2k500" $(MODE) fat32
+else ifeq ($(FS_MODE), ext4)
+	@./buildfs.sh "$(U_EXT4_DIR)/$(EXT4_IMG_NAME)" "la2k500" $(MODE) ext4
 else
-	./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" 2k500 $(MODE)
+	@echo "Invalid FS_MODE"
+	exit 1
+endif
+else ifeq ($(BOARD), laqemu)
+ifeq ($(FS_MODE), fat32)
+	@./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" "laqemu" $(MODE) fat32
+else ifeq ($(FS_MODE), ext4)
+	@./buildfs.sh "$(U_EXT4_DIR)/$(EXT4_IMG_NAME)" "laqemu" $(MODE) ext4
+else
+	@echo "Invalid FS_MODE"
+	exit 1
+endif
 endif
 
-remake-qemu-flash-fat-img: fat32 .WAIT qemu-flash-fat-img
+remake-qemu-flash-img: fs-img .WAIT qemu-flash-$(FS_MODE)-img
 
-qemu-flash-fat-img:
+qemu-flash-fat32-img:
 ifeq ($(BOARD), 2k500)
 	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
 else ifeq ($(BOARD), laqemu)
 	@./la_fat $(QEMU_2K500)
+	@echo QEMU_2K500
+endif
+
+qemu-flash-ext4-img:
+ifeq ($(BOARD), 2k500)
+	@./la_ext4 $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
+else ifeq ($(BOARD), laqemu)
+	@./la_ext4 $(QEMU_2K500)
 	@echo QEMU_2K500
 endif
 
@@ -127,7 +158,7 @@ src-linker.ld: .FORCE
 fsimg-format:
 	sudo mkfs.vfat -F 32 ${U_FAT32}
 
-update-usr:user fat32
+update-usr:user fs_img
 
 kernel: src-linker.ld
 	@echo Platform: $(BOARD)
@@ -152,7 +183,14 @@ runsimple: do-run
 do-run:
 #First, link the image into the directory.
 ifeq ($(BOARD), laqemu)
+ifeq ($(FS_MODE), fat32)
 	ln -sf $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)
+else ifeq ($(FS_MODE), ext4)
+	ln -sf $(EXT4_2K500_LN) $(QEMU_2K500_DIR)/$(EXT4_IMG_LA)
+else
+	@echo "Invalid FS_MODE"
+	exit 1
+endif
 	@echo "========WARNING!========"
 	@echo "The next command is expecting a modified runqemu2k500 script where any potential and implicit \"current working directory\" has been replaced by a generated script storage path."
 	@./run_script $(QEMU_2K500)

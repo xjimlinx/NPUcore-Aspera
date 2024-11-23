@@ -2,6 +2,7 @@ use core::mem::size_of;
 
 use crate::{arch::BLOCK_SZ, timer::TimeSpec};
 
+// 打开标志
 bitflags! {
     pub struct OpenFlags: u32 {
         const O_RDONLY      =   0o0;

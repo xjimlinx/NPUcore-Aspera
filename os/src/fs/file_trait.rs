@@ -65,6 +65,7 @@ pub trait File: DowncastSync {
         ENOTTY
     }
     /// fcntl
+    #[allow(unused)]
     fn fcntl(&self, cmd: u32, arg: u32) -> isize;
 }
 impl_downcast!(sync File);

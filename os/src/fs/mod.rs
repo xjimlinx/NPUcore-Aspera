@@ -18,8 +18,8 @@ pub use self::dev::{hwclock::*, null::*, pipe::*, socket::*, tty::*, zero::*};
 use core::slice::{Iter, IterMut};
 
 pub use self::layout::*;
-
-pub use self::fat32::{BlockDevice, DiskInodeType};
+pub use crate::drivers::block::BlockDevice;
+pub use self::fat32::DiskInodeType;
 // TODO: ext4 support
 use self::{cache::PageCache, directory_tree::DirectoryTreeNode, file_trait::File};
 use crate::{

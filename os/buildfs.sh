@@ -1,6 +1,6 @@
 SUDO=$(if [ $(whoami) = "root" ];then echo -n "";else echo -n "sudo";fi)
-U_FAT32_DIR="../easy-fs-fuse"
-U_FAT32=$1
+U_DIR="../easy-fs-fuse"
+U=$1
 BLK_SZ="512"
 TARGET=riscv64gc-unknown-none-elf
 MODE="debug"
@@ -24,35 +24,47 @@ echo
 echo Current arch: ${ARCH}
 echo
 
-mkdir -p ${U_FAT32_DIR}
-touch ${U_FAT32}
-dd if=/dev/zero of=${U_FAT32} bs=1M count=128
-echo Making fat32 imgage with BLK_SZ=${BLK_SZ}
-mkfs.vfat -F 32 ${U_FAT32} -S ${BLK_SZ}
-fdisk -l ${U_FAT32}
-
-if test -e ${U_FAT32_DIR}/fs
+mkdir -p ${U_DIR}
+touch ${U}
+dd if=/dev/zero of=${U} bs=1M count=128
+# 如果是fat32文件系统
+if [ "$4" = "fat32" ]
 then
-    "$SUDO" rm -r ${U_FAT32_DIR}/fs
+    echo Making fat32 imgage with BLK_SZ=${BLK_SZ}
+    mkfs.vfat -F 32 ${U} -S ${BLK_SZ}
+    fdisk -l ${U}
 fi
 
-"$SUDO" mkdir ${U_FAT32_DIR}/fs
+# 如果是ext4文件系统
+if [ "$4" = "ext4" ]
+then
+    echo Making ext4 imgage with BLK_SZ=${BLK_SZ}
+    mkfs.ext4 ${U}
+    fdisk -l ${U}
+fi
 
-"$SUDO" mount -f ${U_FAT32} ${U_FAT32_DIR}/fs
+if test -e ${U_DIR}/fs
+then
+    "$SUDO" rm -r ${U_DIR}/fs
+fi
+
+"$SUDO" mkdir ${U_DIR}/fs
+
+"$SUDO" mount -f ${U} ${U_DIR}/fs
 if [ $? -ne 0 ]
 then
-    "$SUDO" umount ${U_FAT32}
+    "$SUDO" umount ${U}
 fi
-"$SUDO" mount ${U_FAT32} ${U_FAT32_DIR}/fs
+"$SUDO" mount ${U} ${U_DIR}/fs
 
 # build root
-"$SUDO" mkdir -p ${U_FAT32_DIR}/fs/lib
-# "$SUDO" cp ../user/lib/${ARCH}/libc.so ${U_FAT32_DIR}/fs/lib
-"$SUDO" mkdir -p ${U_FAT32_DIR}/fs/etc
-"$SUDO" mkdir -p ${U_FAT32_DIR}/fs/bin
-"$SUDO" mkdir -p ${U_FAT32_DIR}/fs/root
-"$SUDO" sh -c "echo -e "root:x:0:0:root:/root:/bash\n" > ${U_FAT32_DIR}/fs/etc/passwd"
-"$SUDO" touch ${U_FAT32_DIR}/fs/root/.bash_history
+"$SUDO" mkdir -p ${U_DIR}/fs/lib
+# "$SUDO" cp ../user/lib/${ARCH}/libc.so ${U_DIR}/fs/lib
+"$SUDO" mkdir -p ${U_DIR}/fs/etc
+"$SUDO" mkdir -p ${U_DIR}/fs/bin
+"$SUDO" mkdir -p ${U_DIR}/fs/root
+"$SUDO" sh -c "echo -e "root:x:0:0:root:/root:/bash\n" > ${U_DIR}/fs/etc/passwd"
+"$SUDO" touch ${U_DIR}/fs/root/.bash_history
 
 try_copy(){
     if [ -d $1 ]
@@ -69,18 +81,18 @@ try_copy(){
 
 for programname in $(ls ../user/src/bin)
 do
-    "$SUDO" cp -r ../user/target/${TARGET}/${MODE}/${programname%.rs} ${U_FAT32_DIR}/fs/${programname%.rs}
+    "$SUDO" cp -r ../user/target/${TARGET}/${MODE}/${programname%.rs} ${U_DIR}/fs/${programname%.rs}
 done
 
-if [ ! -f ${U_FAT32_DIR}/fs/syscall ]
+if [ ! -f ${U_DIR}/fs/syscall ]
 then    
-    "$SUDO" mkdir -p ${U_FAT32_DIR}/fs/syscall
+    "$SUDO" mkdir -p ${U_DIR}/fs/syscall
 fi
 
-try_copy ../user/user_C_program/user/build/${ARCH}  ${U_FAT32_DIR}/fs/syscall
-try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_FAT32_DIR}/fs/
-# try_copy ../user/disk/${ARCH} ${U_FAT32_DIR}/fs/
+try_copy ../user/user_C_program/user/build/${ARCH}  ${U_DIR}/fs/syscall
+try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_DIR}/fs/
+# try_copy ../user/disk/${ARCH} ${U_DIR}/fs/
 
-"$SUDO" umount ${U_FAT32_DIR}/fs
+"$SUDO" umount ${U_DIR}/fs
 echo "DONE"
 exit 0

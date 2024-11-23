@@ -23,7 +23,12 @@ pub struct Swap {
     bitmap: Vec<u64>,
     block_ids: Vec<usize>,
 }
+// 每块的大小
+// 每页大小为 4KiB，每块大小为 2KiB
+// 一个页面有 2 个块
 const BLK_PER_PG: usize = PAGE_SIZE / BLOCK_SZ;
+// 交换空间的大小 1MiB
+// 一个交换空间有 256 个页面
 const SWAP_SIZE: usize = 1024 * 1024;
 impl Swap {
     /// size: the number of megabytes in swap
@@ -35,6 +40,7 @@ impl Swap {
         let blocks = size * (SWAP_SIZE / BLOCK_SZ); // 1MiB = 512B * 2048
         Self {
             bitmap,
+            // 此处调用了文件系统的 alloc_blocks() 函数
             block_ids: FILE_SYSTEM.alloc_blocks(blocks),
         }
     }

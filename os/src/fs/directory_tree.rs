@@ -35,6 +35,7 @@ lazy_static! {
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
         let inode = DirectoryTreeNode::new(
             "".to_string(),
+            // TODO: 后面要添加 ext4 文件系统
             Arc::new(FileSystem::new(FS::Fat32)),
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             Weak::new(),

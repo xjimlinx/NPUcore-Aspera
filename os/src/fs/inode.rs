@@ -7,7 +7,8 @@ use core::panic;
 
 use crate::fs::fat32::layout::FATDiskInodeType;
 pub use super::DiskInodeType;
-use crate::fs::fat32::Inode;
+// use crate::fs::fat32::Inode;
+use crate::fs::vfs::Inode;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;

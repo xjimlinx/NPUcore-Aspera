@@ -49,7 +49,7 @@ pub struct BPB {
     pub fat_sz16: u16,
     /// Sector per track used by interrupt 0x13, not needed by SD card.
     pub sec_per_trk: u16,
-    /// Number of heads for interrupt 0x13.    
+    /// Number of heads for interrupt 0x13.
     /// This field is relevant as discussed earlier for BPB_SecPerTrk.
     /// This field contains the one based “count of heads”.
     /// For example, on a 1.44 MB 3.5-inch floppy drive this value is 2.
@@ -64,7 +64,7 @@ pub struct BPB {
     /// Unique to FAT32.
     pub root_clus: u32,
     /// Sector number of FSINFO structure in the reserved area of the
-    /// FAT32 volume. Usually 1.   
+    /// FAT32 volume. Usually 1.
     /// Unique to FAT32.
     pub fs_info: u16,
     /// If non-zero, indicates the sector number in the reserved area
