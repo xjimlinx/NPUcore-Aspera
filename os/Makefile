@@ -1,6 +1,6 @@
 # Building
 TARGET := loongarch64-unknown-linux-gnu
-MODE ?= debug
+MODE ?= release
 CORE_NUM := 1
 
 KERNEL_ELF = target/$(TARGET)/$(MODE)/os
@@ -214,4 +214,3 @@ ch-default:
 # 	@echo "ENT" $(LA_ENTRY_POINT) "\nld " $(LA_LOAD_ADDR)
 
 .PHONY: user update gdb new-gdb monitor .FORCE
-
