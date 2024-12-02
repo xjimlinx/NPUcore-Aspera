@@ -1,4 +1,5 @@
 use super::fat32::{DiskInodeType, EasyFileSystem};
+use super::CURR_FS_TYPE;
 // use super::ext4::{}; TODO:
 use alloc::{
     collections::BTreeMap,
@@ -36,7 +37,7 @@ lazy_static! {
         let inode = DirectoryTreeNode::new(
             "".to_string(),
             // TODO: 后面要添加 ext4 文件系统
-            Arc::new(FileSystem::new(FS_Type::Fat32)),
+            Arc::new(FileSystem::new(CURR_FS_TYPE)),
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             Weak::new(),
         );
