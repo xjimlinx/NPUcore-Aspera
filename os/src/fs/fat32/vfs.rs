@@ -10,6 +10,7 @@ use core::convert::TryInto;
 use core::ops::Mul;
 use core::panic;
 use spin::*;
+use crate::fs::inode::InodeTime;
 
 pub struct FileContent {
     /// For FAT32, size is a value computed from FAT.
@@ -34,43 +35,6 @@ macro_rules! div_ceil {
     ($mult:expr,$deno:expr) => {
         ($mult - 1 + $deno) / $deno
     };
-}
-pub struct InodeTime {
-    create_time: u64,
-    access_time: u64,
-    modify_time: u64,
-}
-#[allow(unused)]
-impl InodeTime {
-    /// Set the inode time's create time.
-    pub fn set_create_time(&mut self, create_time: u64) {
-        self.create_time = create_time;
-    }
-
-    /// Get a reference to the inode time's create time.
-    pub fn create_time(&self) -> &u64 {
-        &self.create_time
-    }
-
-    /// Set the inode time's access time.
-    pub fn set_access_time(&mut self, access_time: u64) {
-        self.access_time = access_time;
-    }
-
-    /// Get a reference to the inode time's access time.
-    pub fn access_time(&self) -> &u64 {
-        &self.access_time
-    }
-
-    /// Set the inode time's modify time.
-    pub fn set_modify_time(&mut self, modify_time: u64) {
-        self.modify_time = modify_time;
-    }
-
-    /// Get a reference to the inode time's modify time.
-    pub fn modify_time(&self) -> &u64 {
-        &self.modify_time
-    }
 }
 
 pub struct InodeLock;
@@ -168,11 +132,7 @@ impl Inode {
             hint,
         });
         let parent_dir = Mutex::new(parent_dir);
-        let time = InodeTime {
-            create_time: 0,
-            access_time: 0,
-            modify_time: 0,
-        };
+        let time = InodeTime::new();
         let inode = Arc::new(Inode {
             inode_lock: RwLock::new(InodeLock {}),
             file_content,
@@ -1504,9 +1464,9 @@ impl Inode {
         let time = self.time.lock();
         (
             self.get_file_size() as i64,
-            time.access_time as i64,
-            time.modify_time as i64,
-            time.create_time as i64,
+            time.access_time().clone() as i64,
+            time.modify_time().clone() as i64,
+            time.create_time().clone() as i64,
             self.get_inode_num_lock(&self.file_content.read())
                 .unwrap_or(0) as u64,
         )
