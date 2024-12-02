@@ -19,8 +19,8 @@ use super::{
 use crate::{
     drivers::BLOCK_DEVICE,
     fs::{
-        inode::{InodeImpl, OSInode},
-        filesystem::FS,
+        fat32::fat_inode::{InodeImpl, OSInode},
+        filesystem::FS_Type,
     },
 };
 #[cfg(feature = "oom_handler")]
@@ -36,7 +36,7 @@ lazy_static! {
         let inode = DirectoryTreeNode::new(
             "".to_string(),
             // TODO: 后面要添加 ext4 文件系统
-            Arc::new(FileSystem::new(FS::Fat32)),
+            Arc::new(FileSystem::new(FS_Type::Fat32)),
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             Weak::new(),
         );
@@ -569,13 +569,13 @@ impl DirectoryTreeNode {
             Err(errno) => return Err(errno),
         };
         match old_inode.filesystem.fs_type {
-            FS::Fat32 => {
+            FS_Type::Fat32 => {
                 let old_file = old_inode.file.downcast_ref::<OSInode>().unwrap();
                 let new_par_file = new_par_inode.file.downcast_ref::<OSInode>().unwrap();
                 new_par_file.link_child(old_last_comp, old_file)?;
             }
-            FS::Null => return Err(EACCES),
-            FS::Ext4 => return todo!(),
+            FS_Type::Null => return Err(EACCES),
+            FS_Type::Ext4 => return todo!(),
         }
         *value.father.lock() = Arc::downgrade(&new_par_inode.get_arc());
         new_lock.lock().as_mut().unwrap().insert(new_key, value);
@@ -633,19 +633,19 @@ fn init_device_directory() {
 
     let null_dev = DirectoryTreeNode::new(
         "null".to_string(),
-        Arc::new(FileSystem::new(FS::Null)),
+        Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Null {}),
         Arc::downgrade(&dev_inode.get_arc()),
     );
     let zero_dev = DirectoryTreeNode::new(
         "zero".to_string(),
-        Arc::new(FileSystem::new(FS::Null)),
+        Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Zero {}),
         Arc::downgrade(&dev_inode.get_arc()),
     );
     let tty_dev = DirectoryTreeNode::new(
         "tty".to_string(),
-        Arc::new(FileSystem::new(FS::Null)),
+        Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Teletype::new()),
         Arc::downgrade(&dev_inode.get_arc()),
     );
@@ -661,7 +661,7 @@ fn init_device_directory() {
     };
     let hwclock_dev = DirectoryTreeNode::new(
         "rtc".to_string(),
-        Arc::new(FileSystem::new(FS::Null)),
+        Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Hwclock {}),
         Arc::downgrade(&misc_inode.get_arc()),
     );

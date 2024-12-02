@@ -7,6 +7,7 @@ use alloc::{
 };
 use downcast_rs::*;
 use spin::Mutex;
+use super::dirent::Dirent;
 
 use super::{cache::PageCache, directory_tree::DirectoryTreeNode, layout::*};
 

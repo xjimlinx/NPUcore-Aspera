@@ -2,6 +2,7 @@ use crate::{
     fs::{file_trait::File, DiskInodeType},
     syscall::errno::{ENOTDIR, SUCCESS},
 };
+use crate::fs::dirent::Dirent;
 
 pub struct Hwclock;
 
@@ -96,7 +97,7 @@ impl File for Hwclock {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<Dirent> {
         todo!()
     }
 

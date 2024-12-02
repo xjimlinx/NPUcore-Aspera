@@ -94,7 +94,7 @@ impl File for Socket {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::dirent::Dirent> {
         todo!()
     }
 

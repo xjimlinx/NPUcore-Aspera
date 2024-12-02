@@ -5,7 +5,7 @@ use crate::{
     syscall::errno::*,
 };
 use spin::Mutex;
-use super::{cache::PageCache, directory_tree::DirectoryTreeNode, file_trait::File, Dirent};
+use super::{cache::PageCache, directory_tree::DirectoryTreeNode, file_trait::File, dirent::Dirent};
 use alloc::{
     string::{String, ToString},
     sync::Arc,

@@ -13,10 +13,12 @@ pub mod swap;
 pub mod inode;
 pub mod file_descriptor;
 mod vfs;
+mod dirent;
 
 pub use file_descriptor::{FileDescriptor, FdTable};
 pub use self::dev::{hwclock::*, null::*, pipe::*, socket::*, tty::*, zero::*};
 
+pub use self::dirent::*;
 pub use self::layout::*;
 pub use crate::drivers::block::BlockDevice;
 pub use self::fat32::DiskInodeType;
