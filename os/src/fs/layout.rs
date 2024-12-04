@@ -63,6 +63,7 @@ bitflags! {
         ///sticky bit (see below)
         const S_ISVTX   =   0o1000;
 
+        // 用户标志位
         ///owner has read, write, and execute permission
         const S_IRWXU   =   0o0700;
         ///owner has read permission
@@ -72,6 +73,7 @@ bitflags! {
         ///owner has execute permission
         const S_IXUSR   =   0o0100;
 
+        // 组标志位
         ///group has read, write, and execute permission
         const S_IRWXG   =   0o0070;
         ///group has read permission
@@ -81,6 +83,7 @@ bitflags! {
         ///group has execute permission
         const S_IXGRP   =   0o0010;
 
+        // 其他标志位
         ///others (not in group) have read, write,and execute permission
         const S_IRWXO   =   0o0007;
         ///others have read permission
