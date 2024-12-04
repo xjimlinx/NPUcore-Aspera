@@ -1,5 +1,8 @@
 use alloc::vec::Vec;
 
+// 根目录项
+use super::directory_tree::ROOT;
+
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
 pub trait VFS {
@@ -27,6 +30,14 @@ pub trait VFS {
         todo!();
     }
 
+    fn get_super_block(&self) -> SuperBlock {
+        todo!();
+    }
+
+    fn get_direcotry(&self) -> ROOT {
+        todo!();
+    }
+
 }
 
 // 对不同类型文件系统文件的封装
@@ -42,7 +53,7 @@ pub struct SuperBlock {
     // 指向与特定文件系统相关的私有数据结构的指针
     s_fs_info: Option<u32>,
     // 根目录 dentry
-    s_root: Option<u32>,
+    s_root: ROOT,
     // 指向 文件系统类型结构体的指针
     s_type: Option<u32>,
 
