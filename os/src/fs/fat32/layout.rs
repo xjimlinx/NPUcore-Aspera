@@ -11,6 +11,7 @@ use core::{
     mem,
     ptr::{addr_of, addr_of_mut},
 };
+use super::DiskInodeType;
 
 pub const BAD_BLOCK: u32 = 0x0FFF_FFF7;
 pub const DIR_ENTRY_UNUSED: u8 = 0xe5;
@@ -186,12 +187,6 @@ pub struct FSInfo {
     /// Note that the high 2 bytes of this value which go into the bytes at offsets 510 and 511
     /// match the signature bytes used at the same offsets in sector 0.
     trail_sig: u32,
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum DiskInodeType {
-    File,
-    Directory,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
