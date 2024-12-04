@@ -1,5 +1,5 @@
 use super::layout::{FATDirEnt, FATShortDirEnt};
-use crate::fs::fat32::vfs::InodeLock;
+use crate::fs::fat32::fat_inode::InodeLock;
 use super::Inode;
 use alloc::string::String;
 use spin::*;
