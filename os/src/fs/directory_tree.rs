@@ -1,4 +1,5 @@
-use super::fat32::{DiskInodeType, EasyFileSystem};
+use super::fat32::EasyFileSystem;
+use super::inode::DiskInodeType;
 use super::CURR_FS_TYPE;
 // use super::ext4::{}; TODO:
 use alloc::{
@@ -20,7 +21,7 @@ use super::{
 use crate::{
     drivers::BLOCK_DEVICE,
     fs::{
-        fat32::fat_inode::{InodeImpl, OSInode},
+        inode::{InodeImpl, OSInode},
         filesystem::FS_Type,
     },
 };
@@ -33,12 +34,15 @@ lazy_static! {
         BLOCK_DEVICE.clone(),
         Arc::new(Mutex::new(BlockCacheManager::new()))
     );
+    // 目录树根节点
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
         let inode = DirectoryTreeNode::new(
+            // 因为是根节点，所以没有名字（根目录是不是只有‘/’，斜杠左边是不是啥也没有？）
             "".to_string(),
             // TODO: 后面要添加 ext4 文件系统
             Arc::new(FileSystem::new(CURR_FS_TYPE)),
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
+            // 父节点，因为是根节点所以没有父节点
             Weak::new(),
         );
         inode.add_special_use();
@@ -260,7 +264,7 @@ impl DirectoryTreeNode {
     }
 
     // 创建一个子文件，文件名和文件类型由参数提供
-    // 其中文件类型存储在fat32下，需要解耦
+    // file_type: 文件是常规文件还是目录
     fn create(&self, name: &str, file_type: DiskInodeType) -> Result<Arc<dyn File>, isize> {
         // if name == "" || !self.file.is_dir() {
         //     debug_assert!(false);
