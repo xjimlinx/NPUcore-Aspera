@@ -5,6 +5,7 @@ os/src/linker.ld
 
 # vscode config
 .vscode/
+.VSCodeCounter/
 
 # kernel build
 os/target/
