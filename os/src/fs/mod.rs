@@ -32,6 +32,7 @@ use lazy_static::*;
 pub const CURR_FS_TYPE: FS_Type = FS_Type::Fat32;
 
 lazy_static! {
+    // 根目录的 FileDescriptor
     pub static ref ROOT_FD: Arc<FileDescriptor> = Arc::new(FileDescriptor::new(
         false,
         false,
