@@ -1,5 +1,5 @@
 MODE ?= release
-all:
+all: clean
 	cd os && make all
 kernel:
 	cd os && make kernel
