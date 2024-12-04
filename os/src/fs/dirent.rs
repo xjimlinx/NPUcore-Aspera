@@ -5,10 +5,9 @@ const NAME_LIMIT: usize = 128;
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 /// Native Linux directory entry structure.
-/// # Note
 /// In theory, the d_name may NOT have a fixed size and `d_name` may be arbitrarily lone.
 pub struct Dirent {
-    /// Inode number
+    /// Inode 节点号
     pub d_ino: usize,
     /// Offset to next `linux_dirent`
     pub d_off: isize,
