@@ -1,14 +1,15 @@
 use crate::{
     mm::try_get_from_user, syscall::errno::EFAULT, task::signal::Signals, timer::TimeSpec,
 };
-use alloc::vec::Vec;
-use core::ptr::null_mut;
 use crate::{
     mm::{copy_from_user_array, copy_to_user_array},
     task::{current_task, sigprocmask, suspend_current_and_run_next, SigMaskHow},
 };
+use alloc::vec::Vec;
+use core::ptr::null_mut;
 
 ///  A scheduling  scheme  whereby  the  local  process  periodically  checks  until  the  pre-specified events (for example, read, write) have occurred.
+/// 一种调度方案，通过该方案，本地进程定期检查，直到预先指定的事件（例如读、写）发生为止。
 /// The PollFd struct in 32-bit style.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -99,7 +100,12 @@ bitflags! {
 /// * A value of 0 indicates that the call timed out and no file descriptors were ready.
 /// * On error, -1 is returned, and errno is set appropriately.
 /// * The observed event is written back to the array, with others cleared.
-pub fn ppoll(fds: *mut PollFd, nfds: usize, tmo_p: *const TimeSpec, sigmask: *const Signals, ) -> isize {
+pub fn ppoll(
+    fds: *mut PollFd,
+    nfds: usize,
+    tmo_p: *const TimeSpec,
+    sigmask: *const Signals,
+) -> isize {
     let task = current_task().unwrap();
     let token = task.get_user_token();
     let timeout: Option<TimeSpec> = match try_get_from_user(token, tmo_p) {
@@ -301,7 +307,14 @@ impl Bytes<FdSet> for FdSet {
 ///    then select() returns immediately.
 ///    (This is useful for  polling.)
 ///    If timeout is NULL (no timeout), select() can block indefinitely.
-pub fn pselect( nfds: usize, read_fds: &mut Option<FdSet>, write_fds: &mut Option<FdSet>, exception_fds: &mut Option<FdSet>, timeout: &Option<TimeSpec>, sigmask: *const Signals, ) -> isize {
+pub fn pselect(
+    nfds: usize,
+    read_fds: &mut Option<FdSet>,
+    write_fds: &mut Option<FdSet>,
+    exception_fds: &mut Option<FdSet>,
+    timeout: &Option<TimeSpec>,
+    sigmask: *const Signals,
+) -> isize {
     let timeout: Option<TimeSpec> = if let Some(ref timeout) = timeout {
         Some(*timeout + crate::timer::TimeSpec::now())
     } else {
