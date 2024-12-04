@@ -17,6 +17,7 @@ use super::layout::{OpenFlags, Stat, SeekWhence};
 /// ### 文件描述符
 #[derive(Clone)]
 pub struct FileDescriptor {
+    // 是否在执行execve时关闭文件描述符
     cloexec: bool,
     nonblock: bool,
     pub file: Arc<dyn File>,
@@ -96,7 +97,7 @@ impl FileDescriptor {
         if self.file.is_file() && !path.starts_with('/') {
             return Err(ENOTDIR);
         }
-        // 首先获取 inode
+        // 首先获取 inode，实际是获取DirectoryTreeNode
         let inode = self.file.get_dirtree_node();
         // 如果 inode 为空，则返回错误码
         let inode = match inode {
