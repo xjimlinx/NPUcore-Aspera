@@ -67,6 +67,7 @@ pub fn sys_getcwd(buf: usize, size: usize) -> isize {
     buf as isize
 }
 
+// Move the read/write file offset
 pub fn sys_lseek(fd: usize, offset: isize, whence: u32) -> isize {
     // whence is not valid
     let whence = match SeekWhence::from_bits(whence) {
