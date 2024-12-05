@@ -5,6 +5,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+
 use core::{
     convert::TryInto,
     fmt::Debug,
@@ -12,9 +13,7 @@ use core::{
     ptr::{addr_of, addr_of_mut},
 };
 
-// use ext4_rs::ext4_defs::inode::Ext4Inode;
-
-
+// 可能后续会用到？
 pub enum ExtType {
     Ext2,
     Ext3,
@@ -64,36 +63,23 @@ pub enum DiskInodeType {
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-#[repr(u8)]
 pub enum Ext4DiskInodeType {
-    AttrClear = 0,
-    AttrReadOnly = 0x01,
-    AttrHidden = 0x02,
-    AttrSystem = 0x04,
-
-    /// Root Dir
-    AttrVolumeID = 0x08,
-    AttrDirectory = 0x10,
-    AttrArchive = 0x20,
-    AttrLongName = 0x0F,
 }
+
 #[repr(align(8))]
 pub union EXT4DirEnt {
-    pub short_entry: EXT4ShortDirEnt,
-    pub long_entry: Ext4LongDirEnt,
+    pub entry: [u8; 8],
     pub empty: [u8; 32],
 }
 
 impl Debug for EXT4DirEnt {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         unsafe {
-            let short_entry = &self.short_entry;
-            let long_entry = &self.long_entry;
+            let entry = &self.entry;
             let empty = &self.empty;
             let mut s = String::new();
             s.push_str("EXT4DirEnt {\n");
-            s.push_str(&format!("  short_entry: {:?},\n", short_entry));
-            s.push_str(&format!("  long_entry: {:?},\n", long_entry));
+            s.push_str(&format!("  entry: {:?},\n", entry));
             s.push_str(&format!("  empty: {:?},\n", empty));
             s.push_str("}");
             write!(f, "{}", s)
@@ -102,41 +88,5 @@ impl Debug for EXT4DirEnt {
 }
 
 impl EXT4DirEnt {
-    // TODO:
-}
-
-#[derive(Debug, Clone, Copy)]
-#[repr(packed)]
-/// On-disk & in-file data structure for FAT32 directory.
-pub struct EXT4ShortDirEnt {
-    /// name, offset
-    pub name: [u8; 11],
-    pub attr: Ext4DiskInodeType,
-    pub nt_res: u8,
-    pub crt_time_teenth: u8,
-    pub crt_time: u16,
-    pub crt_date: u16,
-    pub last_acc_date: u16,
-    pub fst_clus_hi: u16,
-    pub wrt_time: u16,
-    pub wrt_date: u16,
-    pub fst_clus_lo: u16,
-    pub file_size: u32,
-}
-
-impl EXT4ShortDirEnt {
-    // TODO:
-}
-
-pub const LONG_DIR_ENT_NAME_CAPACITY: usize = 13;
-pub const SHORT_DIR_ENT_NAME_CAPACITY: usize = 11;
-#[derive(Debug, PartialEq, Clone, Copy)]
-#[repr(packed)]
-/// *On-disk* data structure for partition information.
-pub struct Ext4LongDirEnt {
-    // TODO:
-}
-
-impl Ext4LongDirEnt {
     // TODO:
 }

@@ -1,7 +1,8 @@
 use super::layout::{FATDirEnt, FATShortDirEnt};
-use crate::fs::fat32::fat_inode::InodeLock;
-use super::Inode;
+use crate::fs::inode::InodeLock;
+use crate::fs::fat32::Inode;
 use alloc::string::String;
+use crate::fs::inode::InodeTrait;
 use spin::*;
 
 /// `DirIterMode` describe `DirIter`'s iterate mode
@@ -42,7 +43,7 @@ pub struct DirIter<'a, 'b> {
 
 impl<'a, 'b> DirIter<'a, 'b> {
     /// Constructor for `DirIter`
-    /// # Arguments    
+    /// # Arguments
     /// + `lock`: The lock of target file content
     /// + `offset`: The start of offset
     /// + `mode`: The iterative mode

@@ -41,6 +41,7 @@ lazy_static! {
             "".to_string(),
             // TODO: 后面要添加 ext4 文件系统
             Arc::new(FileSystem::new(CURR_FS_TYPE)),
+            // 系统Inode，包装了具体文件系统的Inode
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             // 父节点，因为是根节点所以没有父节点
             Weak::new(),

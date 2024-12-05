@@ -12,6 +12,7 @@ use core::{
     ptr::{addr_of, addr_of_mut},
 };
 use super::DiskInodeType;
+use crate::fs::vfs::VFSDirEnt;
 
 pub const BAD_BLOCK: u32 = 0x0FFF_FFF7;
 pub const DIR_ENTRY_UNUSED: u8 = 0xe5;
@@ -209,6 +210,8 @@ pub union FATDirEnt {
     pub long_entry: FATLongDirEnt,
     pub empty: [u8; 32],
 }
+
+impl VFSDirEnt for FATDirEnt {}
 
 impl Debug for FATDirEnt {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

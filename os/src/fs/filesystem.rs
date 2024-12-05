@@ -3,6 +3,7 @@ use alloc::sync::Arc;
 use lazy_static::*;
 use spin::Mutex;
 
+#[allow(unused, non_camel_case_types)]
 pub enum FS_Type {
     Null,
     Fat32,

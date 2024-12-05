@@ -7,13 +7,104 @@ use core::panic;
 
 use crate::fs::fat32::layout::FATDiskInodeType;
 use dirent::Dirent;
+use ext4::Ext4Inode;
+use fat32::fat_inode::FileContent;
+use fat32::layout::FATShortDirEnt;
+use vfs::VFSDirEnt;
 use crate::fs::fat32::fat_inode::Inode;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+use downcast_rs::*;
+
+pub struct InodeLock;
+
+pub trait Inode_Middle{}
 
 pub type InodeImpl = Inode;
+
+/// 针对具体文件系统的Inode类型
+pub enum InodeEnum {
+    Fat32(Arc<InodeImpl>),
+    Ext4(Arc<Ext4Inode>),
+}
+
+#[allow(unused)]
+pub trait InodeTrait: DowncastSync {
+    fn read(&self) -> RwLockReadGuard<InodeLock>;
+    fn write(&self) -> RwLockWriteGuard<InodeLock>;
+    fn get_file_type_lock(&self) -> MutexGuard<DiskInodeType>;
+    fn get_file_type(&self) -> DiskInodeType;
+    fn get_file_size(&self) -> u32;
+    fn get_file_size_rlock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> u32;
+    fn get_file_size_wlock(&self, _inode_lock: &RwLockWriteGuard<InodeLock>) -> u32;
+    fn is_dir(&self) -> bool;
+    fn is_file(&self) -> bool;
+    fn get_inode_num_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32>;
+    fn get_block_id(
+        &self,
+        lock: &RwLockReadGuard<FileContent>,
+        inner_cache_id: u32,
+    ) -> Option<u32>;
+    fn read_at_block_cache_rlock(
+        &self,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> usize;
+    fn read_at_block_cache_wlock(
+        &self,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> usize;
+    fn read_at_block_cache(&self, offset: usize, buf: &mut [u8]) -> usize;
+    fn write_at_block_cache_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        offset: usize,
+        buf: &[u8],
+    ) -> usize;
+    fn write_at_block_cache(&self, offset: usize, buf: &[u8]) -> usize;
+    fn get_single_cache(&self, inner_cache_id: usize) -> Arc<Mutex<PageCache>>;
+    fn get_single_cache_lock(
+        &self,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
+        inner_cache_id: usize,
+    ) -> Arc<Mutex<PageCache>>;
+    fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>>;
+    fn get_all_files_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+    ) -> Vec<(String, FATShortDirEnt, u32)>;
+    // ) -> Vec<(String, Box<dyn VFSDirEnt>, u32)>;
+    fn dirent_info_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        offset: u32,
+        length: usize,
+    ) -> Result<Vec<(String, usize, u64, FATDiskInodeType)>, ()>;
+    fn delete_self_dir_ent(&self) -> Result<(), ()>;
+    fn unlink_lock(
+        &self,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
+        delete: bool,
+    ) -> Result<(), isize>;
+    fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64);
+    fn time(&self) -> MutexGuard<InodeTime>;
+    fn oom(&self) -> usize;
+    fn modify_size_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        diff: isize,
+        clear: bool,
+    );
+    fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool;
+
+    // 从现有的目录项创建新的文件
+    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self>;
+}
 
 pub struct InodeTime {
     create_time: u64,
@@ -30,49 +121,57 @@ impl InodeTime {
         }
     }
     /// Set the inode time's create time.
+    /// 设置inode的创建时间
     pub fn set_create_time(&mut self, create_time: u64) {
         self.create_time = create_time;
     }
 
     /// Get a reference to the inode time's create time.
+    /// 获取inode的创建时间的引用
     pub fn create_time(&self) -> &u64 {
         &self.create_time
     }
 
     /// Set the inode time's access time.
+    /// 设置inode的访问时间
     pub fn set_access_time(&mut self, access_time: u64) {
         self.access_time = access_time;
     }
 
     /// Get a reference to the inode time's access time.
+    /// 获取inode的访问时间的引用
     pub fn access_time(&self) -> &u64 {
         &self.access_time
     }
 
     /// Set the inode time's modify time.
+    /// 设置inode的修改时间
     pub fn set_modify_time(&mut self, modify_time: u64) {
         self.modify_time = modify_time;
     }
 
     /// Get a reference to the inode time's modify time.
+    /// 获取inode的修改时间的引用
     pub fn modify_time(&self) -> &u64 {
         &self.modify_time
     }
 }
 
-
+/// OSInode
+/// 对具体文件系统Inode的封装
 pub struct OSInode {
     readable: bool,
     writable: bool,
-    /// See `DirectoryTreeNode` for more details
     special_use: bool,
     append: bool,
+    // inner: Arc<dyn InodeTrait>,
     inner: Arc<InodeImpl>,
     offset: Mutex<usize>,
     dirnode_ptr: Arc<Mutex<Weak<DirectoryTreeNode>>>,
 }
 
 impl OSInode {
+    // pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
     pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
@@ -97,6 +196,7 @@ impl Drop for OSInode {
         }
     }
 }
+
 #[allow(unused)]
 impl File for OSInode {
     fn deep_clone(&self) -> Arc<dyn File> {
@@ -469,7 +569,6 @@ impl File for OSInode {
         todo!()
     }
 }
-
 
 // 文件或者目录
 #[derive(PartialEq, Debug, Clone, Copy)]

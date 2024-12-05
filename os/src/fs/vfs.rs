@@ -41,9 +41,7 @@ pub trait VFS {
 }
 
 // 对不同类型文件系统文件的封装
-pub struct FileContent{
-
-}
+pub trait VFSFileContent{}
 
 pub struct SuperBlock {
     // 文件系统魔数
@@ -59,6 +57,5 @@ pub struct SuperBlock {
 
 }
 
-pub struct Inode {
-
-}
+// 对不同类型文件系统目录的封装
+pub trait VFSDirEnt{}
