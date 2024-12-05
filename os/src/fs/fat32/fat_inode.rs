@@ -1,9 +1,13 @@
 #![allow(unused)]
+use super::DiskInodeType;
 use crate::fs::fat32::dir_iter::*;
 use crate::fs::fat32::layout::{FATDirEnt, FATDiskInodeType, FATLongDirEnt, FATShortDirEnt};
-use crate::fs::fat32::{BlockCacheManager, Cache, PageCache, PageCacheManager};
 use crate::fs::fat32::EasyFileSystem;
-use super::DiskInodeType;
+use crate::fs::fat32::{BlockCacheManager, Cache, PageCache, PageCacheManager};
+use crate::fs::inode::{InodeLock, Inode_Middle};
+use crate::fs::inode::InodeTime;
+use crate::fs::inode::InodeTrait;
+use crate::fs::vfs::VFSFileContent;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -11,7 +15,6 @@ use core::convert::TryInto;
 use core::ops::Mul;
 use core::panic;
 use spin::*;
-use crate::fs::inode::InodeTime;
 
 pub struct FileContent {
     /// For FAT32, size is a value computed from FAT.
@@ -22,6 +25,8 @@ pub struct FileContent {
     /// If this file is a directory, hint will record the position of last directory entry(the first byte is 0x00).
     hint: u32,
 }
+
+impl VFSFileContent for FileContent {}
 
 impl FileContent {
     /// Get file size
@@ -38,7 +43,6 @@ macro_rules! div_ceil {
     };
 }
 
-pub struct InodeLock;
 /* *ClusLi was DiskInode*
  * Even old New York, was New Amsterdam...
  * Why they changed it I can't say.
@@ -63,6 +67,8 @@ pub struct Inode {
     /// Info Inode to delete file content
     deleted: Mutex<bool>,
 }
+
+impl Inode_Middle for Inode{}
 
 impl Drop for Inode {
     /// Before deleting the inode, the file information should be written back to the parent directory
@@ -153,51 +159,183 @@ impl Inode {
     }
 }
 
+impl Inode {
+    pub fn link_par_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+    ) -> Result<(), ()> {
+        // Genrate directory entries
+        let (short_ent, long_ents) = Self::gen_dir_ent(
+            parent_dir,
+            parent_inode_lock,
+            &name,
+            self.get_first_clus_lock(&self.file_content.read())
+                .unwrap_or(0),
+            *self.file_type.lock(),
+        );
+        // Allocate new directory entry
+        let short_ent_offset =
+            match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                Ok(offset) => offset,
+                Err(_) => return Err(()),
+            };
+        // If this is a directory, modify ".."
+        if self.is_dir()
+            && self
+                .modify_parent_dir_entry(
+                    inode_lock,
+                    parent_dir
+                        .get_first_clus_lock(&parent_dir.file_content.read())
+                        .unwrap(),
+                )
+                .is_err()
+        {
+            return Err(());
+        }
+        // Modify parent directory
+        *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
+        Ok(())
+    }
+
+    /// Create a file or a directory from the parent.
+    /// The parent directory will write the new file directory entries.
+    /// # Arguments
+    /// + `parent_dir`: the pointer to parent directory inode
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: new file's name
+    /// + `file_type`: new file's file type
+    /// # Return Value
+    /// If successful, it will return the new file inode
+    /// Otherwise, it will return Error.
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
+    /// Make sure there are no duplicate names in parent_dir.
+    pub fn create_lock(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+        file_type: DiskInodeType,
+    ) -> Result<Arc<Self>, ()> {
+        if parent_dir.is_file() || name.len() >= 256 {
+            Err(())
+        } else {
+            log::debug!(
+                "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
+                parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
+                &name,
+                file_type
+            );
+            // If file_type is Directory, alloc first cluster
+            let fst_clus = if file_type == DiskInodeType::Directory {
+                let fst_clus = parent_dir
+                    .fs
+                    .fat
+                    .alloc(&parent_dir.fs.block_device, 1, None);
+                if fst_clus.is_empty() {
+                    return Err(());
+                }
+                fst_clus[0]
+            } else {
+                0
+            };
+            // Genrate directory entries
+            let (short_ent, long_ents) =
+                Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
+            // Create directory entry
+            let short_ent_offset =
+                match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                    Ok(offset) => offset,
+                    Err(_) => return Err(()),
+                };
+            // Generate current file
+            let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
+            // If file_type is Directory, set first 3 directory entry
+            if file_type == DiskInodeType::Directory {
+                // Set hint
+                current_file.file_content.write().hint =
+                    2 * core::mem::size_of::<FATDirEnt>() as u32;
+                // Fill content
+                Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
+            }
+            Ok(current_file)
+        }
+    }
+    /// Construct a \[u8,11\] corresponding to the short directory entry name
+    /// # Arguments
+    /// + `parent_dir`: The pointer to parent directory
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: File name
+    /// # Return Value
+    /// A short name slice
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    fn gen_short_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> [u8; 11] {
+        let short_name = FATDirEnt::gen_short_name_prefix(name.clone());
+        if short_name.len() == 0 || short_name.find(' ').unwrap_or(8) == 0 {
+            panic!("illegal short name");
+        }
+
+        let mut short_name_slice = [0u8; 11];
+        short_name_slice.copy_from_slice(&short_name.as_bytes()[0..11]);
+
+        let iter = parent_dir.dir_iter(parent_inode_lock, None, DirIterMode::Short, FORWARD);
+        FATDirEnt::gen_short_name_numtail(iter.collect(), &mut short_name_slice);
+        short_name_slice
+    }
+    /// Construct short and long entries name slices
+    /// # Arguments
+    /// + `parent_dir`: The pointer to parent directory
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: File name
+    /// # Return Value
+    /// A pair of a short name slice and a list of long name slices
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    fn gen_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> ([u8; 11], Vec<[u16; 13]>) {
+        let short_name_slice = Self::gen_short_name_slice(parent_dir, parent_inode_lock, name);
+
+        let long_ent_num = div_ceil!(name.len(), 13);
+        //name.len().div_ceil(13);
+        let mut long_name_slices = Vec::<[u16; 13]>::with_capacity(long_ent_num);
+        for i in 0..long_ent_num {
+            long_name_slices.push(Self::gen_long_name_slice(name, i));
+        }
+
+        (short_name_slice, long_name_slices)
+    }
+    /// Construct a \[u16,13\] corresponding to the `long_ent_num`'th 13-u16 or shorter name slice
+    /// _NOTE_: the first entry is of number 0 for `long_ent_num`
+    /// # Arguments
+    /// + `name`: File name
+    /// + `long_ent_index`: The index of long entry(start from 0)
+    /// # Return Value
+    /// A long name slice
+    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13] {
+        let mut v: Vec<u16> = name.encode_utf16().collect();
+        debug_assert!(long_ent_index * 13 < v.len());
+        while v.len() < (long_ent_index + 1) * 13 {
+            v.push(0);
+        }
+        let start = long_ent_index * 13;
+        let end = (long_ent_index + 1) * 13;
+        v[start..end].try_into().expect("should be able to cast")
+    }
+}
+
 /// Basic Funtions
 impl Inode {
-    /// Get self's file content lock
-    /// # Return Value
-    /// a lock of file content
-    #[inline(always)]
-    pub fn read(&self) -> RwLockReadGuard<InodeLock> {
-        self.inode_lock.read()
-    }
-    #[inline(always)]
-    pub fn write(&self) -> RwLockWriteGuard<InodeLock> {
-        self.inode_lock.write()
-    }
-    pub fn get_file_type_lock(&self) -> MutexGuard<DiskInodeType> {
-        self.file_type.lock()
-    }
-    /// Get file type
-    pub fn get_file_type(&self) -> DiskInodeType {
-        *self.file_type.lock()
-    }
-    #[inline(always)]
-    pub fn get_file_size_rlock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> u32 {
-        self.get_file_size()
-    }
-    pub fn get_file_size_wlock(&self, _inode_lock: &RwLockWriteGuard<InodeLock>) -> u32 {
-        self.get_file_size()
-    }
-    #[inline(always)]
-    pub fn get_file_size(&self) -> u32 {
-        self.file_content.read().get_file_size()
-    }
-    /// Check if file type is directory
-    /// # Return Value
-    /// Bool result
-    #[inline(always)]
-    pub fn is_dir(&self) -> bool {
-        self.get_file_type() == DiskInodeType::Directory
-    }
-    /// Check if file type is file
-    /// # Return Value
-    /// Bool result
-    #[inline(always)]
-    pub fn is_file(&self) -> bool {
-        self.get_file_type() == DiskInodeType::File
-    }
     /// Get first cluster of inode.
     /// # Arguments
     /// + `lock`: The lock of target file content
@@ -212,18 +350,6 @@ impl Inode {
             None
         }
     }
-    /// Get inode number of inode.
-    /// For convenience, treat the first sector number as the inode number.
-    /// # Arguments
-    /// + `lock`: The lock of target file content
-    /// # Return Value
-    /// If cluster list isn't empty, it will return the first sector number.
-    /// Otherwise it will return None.
-    #[inline(always)]
-    fn get_inode_num_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32> {
-        self.get_first_clus_lock(lock)
-            .map(|clus| self.fs.first_sector_of_cluster(clus))
-    }
     /// Get the number of clusters needed after rounding up according to size.
     /// # Return Value
     /// The number representing the number of clusters
@@ -233,28 +359,7 @@ impl Inode {
         div_ceil!(size, clus_sz)
         //(size - 1 + clus_sz) / clus_sz
     }
-    /// Get first block id corresponding to the inner cache index
-    /// # Arguments
-    /// + `lock`: The lock of target file content
-    /// + `inner_cache_id`: The index of inner cache
-    /// # Return Value
-    /// If `inner_cache_id` is valid, it will return the first block id
-    /// Otherwise it will return None
-    #[inline(always)]
-    fn get_block_id(
-        &self,
-        lock: &RwLockReadGuard<FileContent>,
-        inner_cache_id: u32,
-    ) -> Option<u32> {
-        let idx = inner_cache_id as usize / self.fs.sec_per_clus as usize;
-        let clus_list = &lock.clus_list;
-        if idx >= clus_list.len() {
-            return None;
-        }
-        let base = self.fs.first_sector_of_cluster(clus_list[idx]);
-        let offset = inner_cache_id % self.fs.sec_per_clus as u32;
-        Some(base + offset)
-    }
+
     /// Get a list of `block_id` represented by the given cache index.
     /// # Arguments
     /// + `clus_list`: The cluster list
@@ -330,52 +435,6 @@ impl Inode {
             clus_list.last().map(|x| *x),
         );
     }
-    /// Change the size of current file.
-    /// This operation is ignored if the result size is negative
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// + `diff`: The change in file size
-    /// # Warning
-    /// This function will not modify its parent directory (since we changed the size of the current file),
-    /// we will modify it when it is deleted.
-    pub fn modify_size_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        diff: isize,
-        clear: bool,
-    ) {
-        let mut lock = self.file_content.write();
-
-        debug_assert!(diff.saturating_add(lock.size as isize) >= 0);
-
-        let old_size = lock.size;
-        let new_size = (lock.size as isize + diff) as u32;
-
-        let old_clus_num = self.total_clus(old_size) as usize;
-        let new_clus_num = self.total_clus(new_size) as usize;
-
-        if diff > 0 {
-            self.alloc_clus(&mut lock, new_clus_num - old_clus_num);
-        } else {
-            self.dealloc_clus(&mut lock, old_clus_num - new_clus_num);
-        }
-
-        lock.size = new_size;
-        drop(lock);
-
-        if diff > 0 {
-            if clear {
-                self.clear_at_block_cache_lock(
-                    inode_lock,
-                    old_size as usize,
-                    (new_size - old_size) as usize,
-                );
-            }
-        } else {
-            self.file_cache_mgr.notify_new_size(new_size as usize)
-        }
-    }
-
     fn clear_at_block_cache_lock(
         &self,
         _inode_lock: &RwLockWriteGuard<InodeLock>,
@@ -418,263 +477,6 @@ impl Inode {
             start = end_current_block;
         }
         write_size
-    }
-
-    /// When memory is low, it is called to free its cache
-    /// it just tries to lock it's file contents to free memory
-    /// # Return Value
-    /// The number of freed pages
-    pub fn oom(&self) -> usize {
-        let neighbor = |inner_cache_id| {
-            self.get_neighboring_sec(&self.file_content.read().clus_list, inner_cache_id)
-        };
-        self.file_cache_mgr.oom(neighbor, &self.fs.block_device)
-    }
-}
-
-/// IO
-impl Inode {
-    /// Read file content into buffer.
-    /// It will read from `offset` until the end of the file or buffer can't read more
-    /// This operation is ignored if start is greater than or equal to end.
-    /// # Arguments    
-    /// + `inode_lock`: The lock of inode
-    /// + `offset`: The start offset in file
-    /// + `buf`: The buffer to receive data
-    /// # Return Value
-    /// The number of number of bytes read.
-    pub fn read_at_block_cache_rlock(
-        &self,
-        _inode_lock: &RwLockReadGuard<InodeLock>,
-        offset: usize,
-        buf: &mut [u8],
-    ) -> usize {
-        let mut start = offset;
-        let size = self.file_content.read().size as usize;
-        let end = (offset + buf.len()).min(size);
-        if start >= end {
-            return 0;
-        }
-        let mut start_cache = start / PageCacheManager::CACHE_SZ;
-        let mut read_size = 0;
-        loop {
-            // calculate end of current block
-            let mut end_current_block =
-                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
-            end_current_block = end_current_block.min(end);
-            // read and update read size
-            let lock = self.file_content.read();
-            let block_read_size = end_current_block - start;
-            self.file_cache_mgr
-                .get_cache(
-                    start_cache,
-                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
-                    &self.fs.block_device,
-                )
-                .lock()
-                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
-                .read(0, |data_block: &[u8; 4096]| {
-                    let dst = &mut buf[read_size..read_size + block_read_size];
-                    let src = &data_block[start % PageCacheManager::CACHE_SZ
-                        ..start % PageCacheManager::CACHE_SZ + block_read_size];
-                    dst.copy_from_slice(src);
-                });
-            drop(lock);
-            read_size += block_read_size;
-            // move to next block
-            if end_current_block == end {
-                break;
-            }
-            start_cache += 1;
-            start = end_current_block;
-        }
-        read_size
-    }
-    /// do same thing but params different
-    pub fn read_at_block_cache_wlock(
-        &self,
-        _inode_lock: &RwLockWriteGuard<InodeLock>,
-        offset: usize,
-        buf: &mut [u8],
-    ) -> usize {
-        let mut start = offset;
-        let size = self.file_content.read().size as usize;
-        let end = (offset + buf.len()).min(size);
-        if start >= end {
-            return 0;
-        }
-        let mut start_cache = start / PageCacheManager::CACHE_SZ;
-        let mut read_size = 0;
-        loop {
-            // calculate end of current block
-            let mut end_current_block =
-                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
-            end_current_block = end_current_block.min(end);
-            // read and update read size
-            let lock = self.file_content.read();
-            let block_read_size = end_current_block - start;
-            self.file_cache_mgr
-                .get_cache(
-                    start_cache,
-                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
-                    &self.fs.block_device,
-                )
-                .lock()
-                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
-                .read(0, |data_block: &[u8; 4096]| {
-                    let dst = &mut buf[read_size..read_size + block_read_size];
-                    let src = &data_block[start % PageCacheManager::CACHE_SZ
-                        ..start % PageCacheManager::CACHE_SZ + block_read_size];
-                    dst.copy_from_slice(src);
-                });
-            drop(lock);
-            read_size += block_read_size;
-            // move to next block
-            if end_current_block == end {
-                break;
-            }
-            start_cache += 1;
-            start = end_current_block;
-        }
-        read_size
-    }
-    /// Read file content into buffer.
-    /// It will read from `offset` until the end of the file or buffer can't read more
-    /// This operation is ignored if start is greater than or equal to end.
-    /// # Arguments    
-    /// + `offset`: The start offset in file
-    /// + `buf`: The buffer to receive data
-    /// # Return Value
-    /// The number of number of bytes read.
-    /// # Warning
-    /// This function will lock self's `file_content`, may cause deadlock
-    #[inline(always)]
-    pub fn read_at_block_cache(&self, offset: usize, buf: &mut [u8]) -> usize {
-        self.read_at_block_cache_rlock(&self.read(), offset, buf)
-    }
-
-    /// Write buffer into file content.
-    /// It will start to write from `offset` until the buffer is written,
-    /// and when the write exceeds the end of file, it will modify file's size.
-    /// If hard disk space id low, it will try to write as much data as possible.
-    /// # Arguments    
-    /// + `inode_lock`: The lock of inode
-    /// + `offset`: The start offset in file
-    /// + `buf`: The buffer to write data
-    /// # Return Value
-    /// The number of number of bytes write.
-    pub fn write_at_block_cache_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        offset: usize,
-        buf: &[u8],
-    ) -> usize {
-        let mut start = offset;
-        let old_size = self.get_file_size() as usize;
-        let diff_len = buf.len() as isize + offset as isize - old_size as isize;
-        if diff_len > 0 as isize {
-            // allocate as many clusters as possible.
-            self.modify_size_lock(inode_lock, diff_len, false);
-        }
-        let end = (offset + buf.len()).min(self.get_file_size() as usize);
-
-        debug_assert!(start <= end);
-
-        let mut start_cache = start / PageCacheManager::CACHE_SZ;
-        let mut write_size = 0;
-        loop {
-            // calculate end of current block
-            let mut end_current_block =
-                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
-            end_current_block = end_current_block.min(end);
-            // write and update write size
-            let lock = self.file_content.read();
-            let block_write_size = end_current_block - start;
-            self.file_cache_mgr
-                .get_cache(
-                    start_cache,
-                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
-                    &self.fs.block_device,
-                )
-                .lock()
-                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
-                .modify(0, |data_block: &mut [u8; 4096]| {
-                    let src = &buf[write_size..write_size + block_write_size];
-                    let dst = &mut data_block[start % PageCacheManager::CACHE_SZ
-                        ..start % PageCacheManager::CACHE_SZ + block_write_size];
-                    dst.copy_from_slice(src);
-                });
-            drop(lock);
-            write_size += block_write_size;
-            // move to next block
-            if end_current_block == end {
-                break;
-            }
-            start_cache += 1;
-            start = end_current_block;
-        }
-        write_size
-    }
-
-    /// Write buffer into file content.
-    /// It will start to write from `offset` until the buffer is written,
-    /// and when the write exceeds the end of file, it will modify file's size.
-    /// If hard disk space id low, it will try to write as much data as possible.
-    /// # Arguments    
-    /// + `offset`: The start offset in file
-    /// + `buf`: The buffer to write data
-    /// # Return Value
-    /// The number of number of bytes write.
-    /// # Warning
-    /// This function will lock self's `file_content`, may cause deadlock
-    #[inline(always)]
-    pub fn write_at_block_cache(&self, offset: usize, buf: &[u8]) -> usize {
-        self.write_at_block_cache_lock(&self.write(), offset, buf)
-    }
-
-    /// Get a page cache corresponding to `inner_cache_id`.
-    /// # Arguments    
-    /// + `inner_cache_id`: The index of inner cache
-    /// # Return Value
-    /// Pointer to page cache
-    /// # Warning
-    /// This function will lock self's `file_content`, may cause deadlock
-    pub fn get_single_cache(&self, inner_cache_id: usize) -> Arc<Mutex<PageCache>> {
-        self.get_single_cache_lock(&self.read(), inner_cache_id)
-    }
-
-    /// Get a page cache corresponding to `inner_cache_id`.
-    /// # Arguments    
-    /// + `inode_lock`: The lock of inode
-    /// + `inner_cache_id`: The index of inner cache
-    /// # Return Value
-    /// Pointer to page cache
-    pub fn get_single_cache_lock(
-        &self,
-        _inode_lock: &RwLockReadGuard<InodeLock>,
-        inner_cache_id: usize,
-    ) -> Arc<Mutex<PageCache>> {
-        let lock = self.file_content.read();
-        self.file_cache_mgr.get_cache(
-            inner_cache_id,
-            || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, inner_cache_id) },
-            &self.fs.block_device,
-        )
-    }
-
-    /// Get all page caches corresponding to file
-    /// # Return Value
-    /// List of pointers to the page cache
-    pub fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>> {
-        let inode_lock = self.read();
-        let lock = self.file_content.read();
-        let cache_num =
-            (lock.size as usize + PageCacheManager::CACHE_SZ - 1) / PageCacheManager::CACHE_SZ;
-        let mut cache_list = Vec::<Arc<Mutex<PageCache>>>::with_capacity(cache_num);
-        for inner_cache_id in 0..cache_num {
-            cache_list.push(self.get_single_cache_lock(&inode_lock, inner_cache_id));
-        }
-        cache_list
     }
 }
 
@@ -720,24 +522,10 @@ impl Inode {
     }
     /// Check if current file is an empty directory
     /// If a file contains only "." and "..", we consider it to be an empty directory
-    /// # Arguments    
+    /// # Arguments
     /// + `inode_lock`: The lock of inode
     /// # Return Value
     /// Bool result
-    pub fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool {
-        if !self.is_dir() {
-            return false;
-        }
-        let iter = self
-            .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
-            .walk();
-        for (name, _) in iter {
-            if [".", ".."].contains(&name.as_str()) == false {
-                return false;
-            }
-        }
-        true
-    }
     /// Expand directory file's size(a cluster)
     /// # Arguments
     /// + `inode_lock`: The lock of inode
@@ -1061,240 +849,8 @@ impl Inode {
     }
 }
 
-/// Delete
-impl Inode {
-    /// Delete the short and the long entry of `self` from `parent_dir`
-    /// # Return Value
-    /// If successful, it will return Ok.
-    /// Otherwise, it will return Error.
-    /// # Warning
-    /// This function will lock self's parent_dir, may cause deadlock
-    fn delete_self_dir_ent(&self) -> Result<(), ()> {
-        if let Some((par_inode, offset)) = &*self.parent_dir.lock() {
-            return par_inode.delete_dir_ent(&par_inode.write(), *offset);
-        }
-        Err(())
-    }
-    /// Delete the file from the disk,
-    /// This file doesn't be removed immediately(dropped)
-    /// deallocating both the directory entries (whether long or short),
-    /// and the occupied clusters.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// + `delete`: Signal of deleting the file content when inode is dropped
-    /// # Return Value
-    /// If successful, it will return Ok.
-    /// Otherwise, it will return Error with error number.
-    /// # Warning
-    /// This function will lock trash's `file_content`, may cause deadlock
-    /// Make sure Arc has a strong count of 1.
-    /// Make sure all its caches are not held by anyone else.
-    /// Make sure target directory file is empty.
-    pub fn unlink_lock(
-        &self,
-        _inode_lock: &RwLockWriteGuard<InodeLock>,
-        delete: bool,
-    ) -> Result<(), isize> {
-        log::debug!(
-            "[delete_from_disk] inode: {:?}, type: {:?}",
-            self.get_inode_num_lock(&self.file_content.read()),
-            self.file_type
-        );
-        // Remove directory entries
-        if self.parent_dir.lock().is_none() {
-            return Ok(());
-        }
-        if self.delete_self_dir_ent().is_err() {
-            panic!()
-        }
-        if delete {
-            *self.deleted.lock() = true;
-        }
-        *self.parent_dir.lock() = None;
-        Ok(())
-    }
-}
-
-/// Link
-impl Inode {
-    pub fn link_par_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: String,
-    ) -> Result<(), ()> {
-        // Genrate directory entries
-        let (short_ent, long_ents) = Self::gen_dir_ent(
-            parent_dir,
-            parent_inode_lock,
-            &name,
-            self.get_first_clus_lock(&self.file_content.read())
-                .unwrap_or(0),
-            *self.file_type.lock(),
-        );
-        // Allocate new directory entry
-        let short_ent_offset =
-            match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
-                Ok(offset) => offset,
-                Err(_) => return Err(()),
-            };
-        // If this is a directory, modify ".."
-        if self.is_dir()
-            && self
-                .modify_parent_dir_entry(
-                    inode_lock,
-                    parent_dir
-                        .get_first_clus_lock(&parent_dir.file_content.read())
-                        .unwrap(),
-                )
-                .is_err()
-        {
-            return Err(());
-        }
-        // Modify parent directory
-        *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
-        Ok(())
-    }
-}
-
 /// Create
 impl Inode {
-    /// Create a file or a directory from the parent.
-    /// The parent directory will write the new file directory entries.
-    /// # Arguments
-    /// + `parent_dir`: the pointer to parent directory inode
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: new file's name
-    /// + `file_type`: new file's file type
-    /// # Return Value
-    /// If successful, it will return the new file inode
-    /// Otherwise, it will return Error.
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
-    /// Make sure there are no duplicate names in parent_dir.
-    pub fn create_lock(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: String,
-        file_type: DiskInodeType,
-    ) -> Result<Arc<Self>, ()> {
-        if parent_dir.is_file() || name.len() >= 256 {
-            Err(())
-        } else {
-            log::debug!(
-                "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
-                parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
-                &name,
-                file_type
-            );
-            // If file_type is Directory, alloc first cluster
-            let fst_clus = if file_type == DiskInodeType::Directory {
-                let fst_clus = parent_dir
-                    .fs
-                    .fat
-                    .alloc(&parent_dir.fs.block_device, 1, None);
-                if fst_clus.is_empty() {
-                    return Err(());
-                }
-                fst_clus[0]
-            } else {
-                0
-            };
-            // Genrate directory entries
-            let (short_ent, long_ents) =
-                Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
-            // Create directory entry
-            let short_ent_offset =
-                match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
-                    Ok(offset) => offset,
-                    Err(_) => return Err(()),
-                };
-            // Generate current file
-            let current_file = Self::from_ent(&parent_dir, &short_ent, short_ent_offset);
-            // If file_type is Directory, set first 3 directory entry
-            if file_type == DiskInodeType::Directory {
-                // Set hint
-                current_file.file_content.write().hint =
-                    2 * core::mem::size_of::<FATDirEnt>() as u32;
-                // Fill content
-                Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
-            }
-            Ok(current_file)
-        }
-    }
-
-    /// Construct a \[u16,13\] corresponding to the `long_ent_num`'th 13-u16 or shorter name slice
-    /// _NOTE_: the first entry is of number 0 for `long_ent_num`
-    /// # Arguments
-    /// + `name`: File name
-    /// + `long_ent_index`: The index of long entry(start from 0)
-    /// # Return Value
-    /// A long name slice
-    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13] {
-        let mut v: Vec<u16> = name.encode_utf16().collect();
-        debug_assert!(long_ent_index * 13 < v.len());
-        while v.len() < (long_ent_index + 1) * 13 {
-            v.push(0);
-        }
-        let start = long_ent_index * 13;
-        let end = (long_ent_index + 1) * 13;
-        v[start..end].try_into().expect("should be able to cast")
-    }
-
-    /// Construct a \[u8,11\] corresponding to the short directory entry name
-    /// # Arguments
-    /// + `parent_dir`: The pointer to parent directory
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: File name
-    /// # Return Value
-    /// A short name slice
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    fn gen_short_name_slice(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: &String,
-    ) -> [u8; 11] {
-        let short_name = FATDirEnt::gen_short_name_prefix(name.clone());
-        if short_name.len() == 0 || short_name.find(' ').unwrap_or(8) == 0 {
-            panic!("illegal short name");
-        }
-
-        let mut short_name_slice = [0u8; 11];
-        short_name_slice.copy_from_slice(&short_name.as_bytes()[0..11]);
-
-        let iter = parent_dir.dir_iter(parent_inode_lock, None, DirIterMode::Short, FORWARD);
-        FATDirEnt::gen_short_name_numtail(iter.collect(), &mut short_name_slice);
-        short_name_slice
-    }
-    /// Construct short and long entries name slices
-    /// # Arguments
-    /// + `parent_dir`: The pointer to parent directory
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: File name
-    /// # Return Value
-    /// A pair of a short name slice and a list of long name slices
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    fn gen_name_slice(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: &String,
-    ) -> ([u8; 11], Vec<[u16; 13]>) {
-        let short_name_slice = Self::gen_short_name_slice(parent_dir, parent_inode_lock, name);
-
-        let long_ent_num = div_ceil!(name.len(), 13);
-        //name.len().div_ceil(13);
-        let mut long_name_slices = Vec::<[u16; 13]>::with_capacity(long_ent_num);
-        for i in 0..long_ent_num {
-            long_name_slices.push(Self::gen_long_name_slice(name, i));
-        }
-
-        (short_name_slice, long_name_slices)
-    }
-
     /// Construct short and long entries
     /// # Arguments
     /// + `parent_dir`: The pointer to parent directory
@@ -1335,7 +891,7 @@ impl Inode {
     /// + `offset`: the offset of the short directory entry in the `parent_dir`
     /// # Return Value
     /// Pointer to Inode
-    pub fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
+    pub fn from_fat_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
         Self::new(
             ent.get_first_clus(),
             if ent.is_dir() {
@@ -1450,50 +1006,376 @@ impl Inode {
     }
 }
 
-// metadata
-impl Inode {
-    /// Return the `time` field of `self`
-    pub fn time(&self) -> MutexGuard<InodeTime> {
-        self.time.lock()
+impl InodeTrait for Inode {
+    /// Get self's file content lock
+    /// # Return Value
+    /// a lock of file content
+    #[inline(always)]
+    fn read(&self) -> RwLockReadGuard<InodeLock> {
+        self.inode_lock.read()
     }
-    /// Return the `stat` structure to `self` file.
+    #[inline(always)]
+    fn write(&self) -> RwLockWriteGuard<InodeLock> {
+        self.inode_lock.write()
+    }
+    fn get_file_type_lock(&self) -> MutexGuard<DiskInodeType> {
+        self.file_type.lock()
+    }
+    /// Get file type
+    fn get_file_type(&self) -> DiskInodeType {
+        *self.file_type.lock()
+    }
+    #[inline(always)]
+    fn get_file_size_rlock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> u32 {
+        self.get_file_size()
+    }
+    fn get_file_size_wlock(&self, _inode_lock: &RwLockWriteGuard<InodeLock>) -> u32 {
+        self.get_file_size()
+    }
+    #[inline(always)]
+    fn get_file_size(&self) -> u32 {
+        self.file_content.read().get_file_size()
+    }
+    /// Check if file type is directory
+    /// # Return Value
+    /// Bool result
+    #[inline(always)]
+    fn is_dir(&self) -> bool {
+        self.get_file_type() == DiskInodeType::Directory
+    }
+    /// Check if file type is file
+    /// # Return Value
+    /// Bool result
+    #[inline(always)]
+    fn is_file(&self) -> bool {
+        self.get_file_type() == DiskInodeType::File
+    }
+    /// Get inode number of inode.
+    /// For convenience, treat the first sector number as the inode number.
+    /// # Arguments
+    /// + `lock`: The lock of target file content
+    /// # Return Value
+    /// If cluster list isn't empty, it will return the first sector number.
+    /// Otherwise it will return None.
+    #[inline(always)]
+    fn get_inode_num_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32> {
+        self.get_first_clus_lock(lock)
+            .map(|clus| self.fs.first_sector_of_cluster(clus))
+    }
+    /// Get first block id corresponding to the inner cache index
+    /// # Arguments
+    /// + `lock`: The lock of target file content
+    /// + `inner_cache_id`: The index of inner cache
+    /// # Return Value
+    /// If `inner_cache_id` is valid, it will return the first block id
+    /// Otherwise it will return None
+    #[inline(always)]
+    fn get_block_id(
+        &self,
+        lock: &RwLockReadGuard<FileContent>,
+        inner_cache_id: u32,
+    ) -> Option<u32> {
+        let idx = inner_cache_id as usize / self.fs.sec_per_clus as usize;
+        let clus_list = &lock.clus_list;
+        if idx >= clus_list.len() {
+            return None;
+        }
+        let base = self.fs.first_sector_of_cluster(clus_list[idx]);
+        let offset = inner_cache_id % self.fs.sec_per_clus as u32;
+        Some(base + offset)
+    }
+    /// Read file content into buffer.
+    /// It will read from `offset` until the end of the file or buffer can't read more
+    /// This operation is ignored if start is greater than or equal to end.
     /// # Arguments
     /// + `inode_lock`: The lock of inode
-    /// # Return value
-    /// (file size, access time, modify time, create time, inode number)
-    pub fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64) {
-        let time = self.time.lock();
-        (
-            self.get_file_size() as i64,
-            time.access_time().clone() as i64,
-            time.modify_time().clone() as i64,
-            time.create_time().clone() as i64,
-            self.get_inode_num_lock(&self.file_content.read())
-                .unwrap_or(0) as u64,
+    /// + `offset`: The start offset in file
+    /// + `buf`: The buffer to receive data
+    /// # Return Value
+    /// The number of number of bytes read.
+    fn read_at_block_cache_rlock(
+        &self,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> usize {
+        let mut start = offset;
+        let size = self.file_content.read().size as usize;
+        let end = (offset + buf.len()).min(size);
+        if start >= end {
+            return 0;
+        }
+        let mut start_cache = start / PageCacheManager::CACHE_SZ;
+        let mut read_size = 0;
+        loop {
+            // calculate end of current block
+            let mut end_current_block =
+                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
+            end_current_block = end_current_block.min(end);
+            // read and update read size
+            let lock = self.file_content.read();
+            let block_read_size = end_current_block - start;
+            self.file_cache_mgr
+                .get_cache(
+                    start_cache,
+                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
+                    &self.fs.block_device,
+                )
+                .lock()
+                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
+                .read(0, |data_block: &[u8; 4096]| {
+                    let dst = &mut buf[read_size..read_size + block_read_size];
+                    let src = &data_block[start % PageCacheManager::CACHE_SZ
+                        ..start % PageCacheManager::CACHE_SZ + block_read_size];
+                    dst.copy_from_slice(src);
+                });
+            drop(lock);
+            read_size += block_read_size;
+            // move to next block
+            if end_current_block == end {
+                break;
+            }
+            start_cache += 1;
+            start = end_current_block;
+        }
+        read_size
+    }
+    /// do same thing but params different
+    fn read_at_block_cache_wlock(
+        &self,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> usize {
+        let mut start = offset;
+        let size = self.file_content.read().size as usize;
+        let end = (offset + buf.len()).min(size);
+        if start >= end {
+            return 0;
+        }
+        let mut start_cache = start / PageCacheManager::CACHE_SZ;
+        let mut read_size = 0;
+        loop {
+            // calculate end of current block
+            let mut end_current_block =
+                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
+            end_current_block = end_current_block.min(end);
+            // read and update read size
+            let lock = self.file_content.read();
+            let block_read_size = end_current_block - start;
+            self.file_cache_mgr
+                .get_cache(
+                    start_cache,
+                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
+                    &self.fs.block_device,
+                )
+                .lock()
+                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
+                .read(0, |data_block: &[u8; 4096]| {
+                    let dst = &mut buf[read_size..read_size + block_read_size];
+                    let src = &data_block[start % PageCacheManager::CACHE_SZ
+                        ..start % PageCacheManager::CACHE_SZ + block_read_size];
+                    dst.copy_from_slice(src);
+                });
+            drop(lock);
+            read_size += block_read_size;
+            // move to next block
+            if end_current_block == end {
+                break;
+            }
+            start_cache += 1;
+            start = end_current_block;
+        }
+        read_size
+    }
+    /// Read file content into buffer.
+    /// It will read from `offset` until the end of the file or buffer can't read more
+    /// This operation is ignored if start is greater than or equal to end.
+    /// # Arguments
+    /// + `offset`: The start offset in file
+    /// + `buf`: The buffer to receive data
+    /// # Return Value
+    /// The number of number of bytes read.
+    /// # Warning
+    /// This function will lock self's `file_content`, may cause deadlock
+    #[inline(always)]
+    fn read_at_block_cache(&self, offset: usize, buf: &mut [u8]) -> usize {
+        self.read_at_block_cache_rlock(&self.read(), offset, buf)
+    }
+
+    /// Write buffer into file content.
+    /// It will start to write from `offset` until the buffer is written,
+    /// and when the write exceeds the end of file, it will modify file's size.
+    /// If hard disk space id low, it will try to write as much data as possible.
+    /// # Arguments
+    /// + `inode_lock`: The lock of inode
+    /// + `offset`: The start offset in file
+    /// + `buf`: The buffer to write data
+    /// # Return Value
+    /// The number of number of bytes write.
+    fn write_at_block_cache_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        offset: usize,
+        buf: &[u8],
+    ) -> usize {
+        let mut start = offset;
+        let old_size = self.get_file_size() as usize;
+        let diff_len = buf.len() as isize + offset as isize - old_size as isize;
+        if diff_len > 0 as isize {
+            // allocate as many clusters as possible.
+            self.modify_size_lock(inode_lock, diff_len, false);
+        }
+        let end = (offset + buf.len()).min(self.get_file_size() as usize);
+
+        debug_assert!(start <= end);
+
+        let mut start_cache = start / PageCacheManager::CACHE_SZ;
+        let mut write_size = 0;
+        loop {
+            // calculate end of current block
+            let mut end_current_block =
+                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
+            end_current_block = end_current_block.min(end);
+            // write and update write size
+            let lock = self.file_content.read();
+            let block_write_size = end_current_block - start;
+            self.file_cache_mgr
+                .get_cache(
+                    start_cache,
+                    || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, start_cache) },
+                    &self.fs.block_device,
+                )
+                .lock()
+                // I know hardcoding 4096 in is bad, but I can't get around Rust's syntax checking...
+                .modify(0, |data_block: &mut [u8; 4096]| {
+                    let src = &buf[write_size..write_size + block_write_size];
+                    let dst = &mut data_block[start % PageCacheManager::CACHE_SZ
+                        ..start % PageCacheManager::CACHE_SZ + block_write_size];
+                    dst.copy_from_slice(src);
+                });
+            drop(lock);
+            write_size += block_write_size;
+            // move to next block
+            if end_current_block == end {
+                break;
+            }
+            start_cache += 1;
+            start = end_current_block;
+        }
+        write_size
+    }
+
+    /// Write buffer into file content.
+    /// It will start to write from `offset` until the buffer is written,
+    /// and when the write exceeds the end of file, it will modify file's size.
+    /// If hard disk space id low, it will try to write as much data as possible.
+    /// # Arguments
+    /// + `offset`: The start offset in file
+    /// + `buf`: The buffer to write data
+    /// # Return Value
+    /// The number of number of bytes write.
+    /// # Warning
+    /// This function will lock self's `file_content`, may cause deadlock
+    #[inline(always)]
+    fn write_at_block_cache(&self, offset: usize, buf: &[u8]) -> usize {
+        self.write_at_block_cache_lock(&self.write(), offset, buf)
+    }
+
+    /// Get a page cache corresponding to `inner_cache_id`.
+    /// # Arguments
+    /// + `inner_cache_id`: The index of inner cache
+    /// # Return Value
+    /// Pointer to page cache
+    /// # Warning
+    /// This function will lock self's `file_content`, may cause deadlock
+    fn get_single_cache(&self, inner_cache_id: usize) -> Arc<Mutex<PageCache>> {
+        self.get_single_cache_lock(&self.read(), inner_cache_id)
+    }
+
+    /// Get a page cache corresponding to `inner_cache_id`.
+    /// # Arguments
+    /// + `inode_lock`: The lock of inode
+    /// + `inner_cache_id`: The index of inner cache
+    /// # Return Value
+    /// Pointer to page cache
+    fn get_single_cache_lock(
+        &self,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
+        inner_cache_id: usize,
+    ) -> Arc<Mutex<PageCache>> {
+        let lock = self.file_content.read();
+        self.file_cache_mgr.get_cache(
+            inner_cache_id,
+            || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, inner_cache_id) },
+            &self.fs.block_device,
         )
     }
 
-    pub fn get_all_files_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-    ) -> Vec<(String, FATShortDirEnt, u32)> {
-        let mut vec = Vec::with_capacity(8);
-        let mut walker = self
-            .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
-            .walk();
-        loop {
-            let ele = walker.next();
-            match ele {
-                Some((name, short_ent)) => {
-                    if name == "." || name == ".." {
-                        continue;
-                    }
-                    vec.push((name, short_ent, walker.iter.get_offset().unwrap()))
-                }
-                None => break,
-            }
+    /// Get all page caches corresponding to file
+    /// # Return Value
+    /// List of pointers to the page cache
+    fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>> {
+        let inode_lock = self.read();
+        let lock = self.file_content.read();
+        let cache_num =
+            (lock.size as usize + PageCacheManager::CACHE_SZ - 1) / PageCacheManager::CACHE_SZ;
+        let mut cache_list = Vec::<Arc<Mutex<PageCache>>>::with_capacity(cache_num);
+        for inner_cache_id in 0..cache_num {
+            cache_list.push(self.get_single_cache_lock(&inode_lock, inner_cache_id));
         }
-        vec
+        cache_list
+    }
+
+    /// Delete the short and the long entry of `self` from `parent_dir`
+    /// # Return Value
+    /// If successful, it will return Ok.
+    /// Otherwise, it will return Error.
+    /// # Warning
+    /// This function will lock self's parent_dir, may cause deadlock
+    fn delete_self_dir_ent(&self) -> Result<(), ()> {
+        if let Some((par_inode, offset)) = &*self.parent_dir.lock() {
+            return par_inode.delete_dir_ent(&par_inode.write(), *offset);
+        }
+        Err(())
+    }
+    /// Delete the file from the disk,
+    /// This file doesn't be removed immediately(dropped)
+    /// deallocating both the directory entries (whether long or short),
+    /// and the occupied clusters.
+    /// # Arguments
+    /// + `inode_lock`: The lock of inode
+    /// + `delete`: Signal of deleting the file content when inode is dropped
+    /// # Return Value
+    /// If successful, it will return Ok.
+    /// Otherwise, it will return Error with error number.
+    /// # Warning
+    /// This function will lock trash's `file_content`, may cause deadlock
+    /// Make sure Arc has a strong count of 1.
+    /// Make sure all its caches are not held by anyone else.
+    /// Make sure target directory file is empty.
+    fn unlink_lock(
+        &self,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
+        delete: bool,
+    ) -> Result<(), isize> {
+        log::debug!(
+            "[delete_from_disk] inode: {:?}, type: {:?}",
+            self.get_inode_num_lock(&self.file_content.read()),
+            self.file_type
+        );
+        // Remove directory entries
+        if self.parent_dir.lock().is_none() {
+            return Ok(());
+        }
+        if self.delete_self_dir_ent().is_err() {
+            panic!()
+        }
+        if delete {
+            *self.deleted.lock() = true;
+        }
+        *self.parent_dir.lock() = None;
+        Ok(())
     }
 
     /// Get a dirent information from the `self` at `offset`
@@ -1505,7 +1387,7 @@ impl Inode {
     /// # Return value
     /// On success, the function returns `Ok(file name, file size, first cluster, file type)`.
     /// On failure, multiple chances exist: either the Vec is empty, or the Result is `Err(())`.
-    pub fn dirent_info_lock(
+    fn dirent_info_lock(
         &self,
         inode_lock: &RwLockWriteGuard<InodeLock>,
         offset: u32,
@@ -1550,5 +1432,127 @@ impl Inode {
             last_short_ent = short_ent;
         }
         Ok(v)
+    }
+
+    /// Return the `stat` structure to `self` file.
+    /// # Arguments
+    /// + `inode_lock`: The lock of inode
+    /// # Return value
+    /// (file size, access time, modify time, create time, inode number)
+    fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64) {
+        let time = self.time.lock();
+        (
+            self.get_file_size() as i64,
+            time.access_time().clone() as i64,
+            time.modify_time().clone() as i64,
+            time.create_time().clone() as i64,
+            self.get_inode_num_lock(&self.file_content.read())
+                .unwrap_or(0) as u64,
+        )
+    }
+
+    /// Return the `time` field of `self`
+    fn time(&self) -> MutexGuard<InodeTime> {
+        self.time.lock()
+    }
+
+    /// When memory is low, it is called to free its cache
+    /// it just tries to lock it's file contents to free memory
+    /// # Return Value
+    /// The number of freed pages
+    fn oom(&self) -> usize {
+        let neighbor = |inner_cache_id| {
+            self.get_neighboring_sec(&self.file_content.read().clus_list, inner_cache_id)
+        };
+        self.file_cache_mgr.oom(neighbor, &self.fs.block_device)
+    }
+
+    /// Change the size of current file.
+    /// This operation is ignored if the result size is negative
+    /// # Arguments
+    /// + `inode_lock`: The lock of inode
+    /// + `diff`: The change in file size
+    /// # Warning
+    /// This function will not modify its parent directory (since we changed the size of the current file),
+    /// we will modify it when it is deleted.
+    fn modify_size_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        diff: isize,
+        clear: bool,
+    ) {
+        let mut lock = self.file_content.write();
+
+        debug_assert!(diff.saturating_add(lock.size as isize) >= 0);
+
+        let old_size = lock.size;
+        let new_size = (lock.size as isize + diff) as u32;
+
+        let old_clus_num = self.total_clus(old_size) as usize;
+        let new_clus_num = self.total_clus(new_size) as usize;
+
+        if diff > 0 {
+            self.alloc_clus(&mut lock, new_clus_num - old_clus_num);
+        } else {
+            self.dealloc_clus(&mut lock, old_clus_num - new_clus_num);
+        }
+
+        lock.size = new_size;
+        drop(lock);
+
+        if diff > 0 {
+            if clear {
+                self.clear_at_block_cache_lock(
+                    inode_lock,
+                    old_size as usize,
+                    (new_size - old_size) as usize,
+                );
+            }
+        } else {
+            self.file_cache_mgr.notify_new_size(new_size as usize)
+        }
+    }
+
+    fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool {
+        if !self.is_dir() {
+            return false;
+        }
+        let iter = self
+            .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
+            .walk();
+        for (name, _) in iter {
+            if [".", ".."].contains(&name.as_str()) == false {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn get_all_files_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+    ) -> Vec<(String, FATShortDirEnt, u32)> {
+        let mut vec = Vec::with_capacity(8);
+        let mut walker = self
+            .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
+            .walk();
+        loop {
+            let ele = walker.next();
+            match ele {
+                Some((name, short_ent)) => {
+                    if name == "." || name == ".." {
+                        continue;
+                    }
+                    vec.push((name, short_ent, walker.iter.get_offset().unwrap()))
+                }
+                None => break,
+            }
+        }
+        vec
+    }
+
+    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
+        let inode = Self::from_fat_ent(parent_dir, ent, offset);
+        inode
     }
 }
