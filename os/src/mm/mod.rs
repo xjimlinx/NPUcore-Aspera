@@ -14,7 +14,9 @@ pub use frame_allocator::{
     frame_alloc, frame_alloc_uninit, frame_dealloc, frame_reserve, unallocated_frames, FrameTracker,
 };
 pub use map_area::{Frame, MapFlags, MapPermission};
+#[allow(unused)]
 pub use memory_set::{kernel_token, remap_test, MemoryError, MemorySet, KERNEL_SPACE};
+#[allow(unused)]
 pub use page_table::{
     copy_from_user, copy_from_user_array, copy_to_user, copy_to_user_array, copy_to_user_string,
     get_from_user, translated_byte_buffer, translated_byte_buffer_append_to_existing_vec,

@@ -1,6 +1,9 @@
 // use super::layout::BAD_BLOCK;
+#[allow(unused)]
 use super::{BlockCacheManager, BlockDevice, Cache};
+#[allow(unused)]
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
+#[allow(unused)]
 use spin::{Mutex, MutexGuard};
 
 pub const EOC: u32 = 0x0FFF_FFFF;

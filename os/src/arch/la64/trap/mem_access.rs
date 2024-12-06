@@ -1,3 +1,4 @@
+#[allow(unused)]
 use alloc::collections::btree_set::Intersection;
 use bit_field::BitField;
 use core::{convert::TryInto, fmt::Debug};

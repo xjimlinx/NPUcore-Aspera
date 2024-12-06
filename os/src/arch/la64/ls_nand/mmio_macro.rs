@@ -183,6 +183,7 @@ macro_rules! impl_define_csr_rd_only {
     };
 }
 
+#[allow(unused)]
 macro_rules! impl_predicate_neg {
     ($csr_ident:ident,$num:literal) => {
         #[inline(always)]
@@ -201,6 +202,7 @@ macro_rules! impl_predicate {
     };
 }
 
+#[allow(unused)]
 macro_rules! impl_get_reg_independ {
     ($csr_ident:ident,$ty_name:ident) => {
         #[inline(always)]

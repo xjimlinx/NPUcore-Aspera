@@ -7,13 +7,16 @@ mod superblock;
 mod block;
 pub mod layout;
 pub use ext4_inode::*;
-
+#[allow(unused)]
 pub use super::cache::{BlockCacheManager, BufferCache, Cache, PageCache, PageCacheManager};
 pub use crate::drivers::block::BlockDevice;
 use bitmap::Ext4;
+#[allow(unused)]
 pub use efs::EasyFileSystem;
 // pub use layout::DiskInodeType;
+#[allow(unused)]
 pub use crate::fs::fat32::fat_inode::Inode;
+#[allow(unused)]
 pub use ext4_rs::fuse_interface::*;
 
 pub const EXT4_INODE_MODE_FILE: usize = 0x8000;

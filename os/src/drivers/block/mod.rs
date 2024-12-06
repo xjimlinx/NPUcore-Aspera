@@ -2,7 +2,9 @@ mod block_dev;
 mod mem_blk;
 mod virtio_blk;
 pub use block_dev::BlockDevice;
+#[allow(unused)]
 pub use mem_blk::MemBlockWrapper;
+#[allow(unused)]
 pub use virtio_blk::VirtIOBlock;
 
 use crate::arch::{BlockDeviceImpl, BLOCK_SZ};

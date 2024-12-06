@@ -1,11 +1,11 @@
 #![no_std]
 #![no_main]
-#![feature(asm)]
+// #![feature(asm)]
 #![feature(linkage)]
 #![feature(asm_const)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
-#![feature(global_asm)]
+// #![feature(global_asm)]
 #![feature(asm_experimental_arch)]
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
@@ -16,7 +16,7 @@
 #![feature(lang_items)]
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
-#![feature(option_result_unwrap_unchecked)]
+// #![feature(option_result_unwrap_unchecked)]
 #![feature(const_maybe_uninit_assume_init)]
 
 pub use arch::config;

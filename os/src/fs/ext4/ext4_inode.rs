@@ -325,6 +325,7 @@ impl Ext4Inode {
     }
 }
 
+#[allow(unused)]
 impl InodeTrait for Ext4Inode {
     fn read(&self) -> spin::RwLockReadGuard<crate::fs::inode::InodeLock> {
         todo!()
@@ -509,17 +510,18 @@ impl InodeTrait for Ext4Inode {
     }
 
     fn from_ent(
-        parent_dir: &alloc::sync::Arc<Self>,
+        &self,
+        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
         ent: &crate::fs::fat32::layout::FATShortDirEnt,
         offset: u32,
-    ) -> alloc::sync::Arc<Self> {
+    ) -> alloc::sync::Arc<dyn InodeTrait> {
         todo!()
     }
 
     fn link_par_lock(
         &self,
         inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        parent_dir: &alloc::sync::Arc<Self>,
+        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
         parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
         name: alloc::string::String,
     ) -> Result<(), ()>
@@ -528,13 +530,14 @@ impl InodeTrait for Ext4Inode {
     {
         todo!()
     }
-
+    #[allow(unused)]
     fn create_lock(
-        parent_dir: &alloc::sync::Arc<Self>,
+        &self,
+        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
         parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
         name: alloc::string::String,
         file_type: crate::fs::DiskInodeType,
-    ) -> Result<alloc::sync::Arc<Self>, ()>
+    ) -> Result<alloc::sync::Arc<dyn InodeTrait>, ()>
     where
         Self: Sized,
     {

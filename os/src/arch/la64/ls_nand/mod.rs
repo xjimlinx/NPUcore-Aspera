@@ -53,7 +53,7 @@ impl BlockDevice for LoongsonNand {
         }
         drop(lock);
     }
-
+    #[allow(unused)]
     fn write_block(&self, block_id: usize, buf: &[u8]) {
         /* assert!(buf.len() % BLOCK_SZ == 0); */
         //self.clear_mult_block(block_id, buf.len() / BLOCK_SZ, 0);

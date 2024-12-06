@@ -6,7 +6,7 @@ use crate::fs::fat32::EasyFileSystem;
 use crate::fs::fat32::{BlockCacheManager, Cache, PageCache, PageCacheManager};
 use crate::fs::inode::InodeTime;
 use crate::fs::inode::InodeTrait;
-use crate::fs::inode::{InodeLock, Inode_Middle};
+use crate::fs::inode::{InodeLock, InodeMiddle};
 use crate::fs::vfs::VFSFileContent;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -68,7 +68,7 @@ pub struct Inode {
     deleted: Mutex<bool>,
 }
 
-impl Inode_Middle for Inode {}
+impl InodeMiddle for Inode {}
 
 impl Drop for Inode {
     /// Before deleting the inode, the file information should be written back to the parent directory
@@ -159,8 +159,7 @@ impl Inode {
     }
 }
 
-impl Inode {
-}
+impl Inode {}
 
 /// Basic Funtions
 impl Inode {
@@ -1374,27 +1373,32 @@ impl InodeTrait for Inode {
         vec
     }
 
-    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self>
+    fn from_ent(&self, parent_dir: &Arc<dyn InodeTrait>, ent: &FATShortDirEnt, offset: u32) -> Arc<dyn InodeTrait>
     where
         Self: Sized,
     {
-        let inode = Self::from_fat_ent(parent_dir, ent, offset);
+        let parent_dir_specific = (&**parent_dir).as_any().downcast_ref::<Arc<Inode>>().unwrap();
+        // let inode = Self::from_fat_ent(parent_dir, ent, offset);
+        // let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        let inode = Self::from_fat_ent(parent_dir_specific, ent, offset);
         inode
     }
 
     fn link_par_lock(
         &self,
         inode_lock: &RwLockWriteGuard<InodeLock>,
-        parent_dir: &Arc<Self>,
+        parent_dir: &Arc<dyn InodeTrait>,
         parent_inode_lock: &RwLockWriteGuard<InodeLock>,
         name: String,
     ) -> Result<(), ()>
-    where
-        Self: Sized,
+// where
+        // Self: Sized,
     {
+        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
         // Genrate directory entries
         let (short_ent, long_ents) = Self::gen_dir_ent(
-            parent_dir,
+            // parent_dir,
+            parent_dir_specific,
             parent_inode_lock,
             &name,
             self.get_first_clus_lock(&self.file_content.read())
@@ -1403,7 +1407,8 @@ impl InodeTrait for Inode {
         );
         // Allocate new directory entry
         let short_ent_offset =
-            match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+            // match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+            match parent_dir_specific.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
                 Ok(offset) => offset,
                 Err(_) => return Err(()),
             };
@@ -1412,8 +1417,10 @@ impl InodeTrait for Inode {
             && self
                 .modify_parent_dir_entry(
                     inode_lock,
-                    parent_dir
-                        .get_first_clus_lock(&parent_dir.file_content.read())
+                    // parent_dir
+                    parent_dir_specific
+                        // .get_first_clus_lock(&parent_dir.file_content.read())
+                        .get_first_clus_lock(&parent_dir_specific.file_content.read())
                         .unwrap(),
                 )
                 .is_err()
@@ -1421,7 +1428,8 @@ impl InodeTrait for Inode {
             return Err(());
         }
         // Modify parent directory
-        *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
+        // *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
+        *self.parent_dir.lock() = Some((parent_dir_specific.clone(), short_ent_offset));
         Ok(())
     }
 
@@ -1440,27 +1448,34 @@ impl InodeTrait for Inode {
     /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
     /// Make sure there are no duplicate names in parent_dir.
     fn create_lock(
-        parent_dir: &Arc<Self>,
+        &self,
+        parent_dir: &Arc<dyn InodeTrait>,
         parent_inode_lock: &RwLockWriteGuard<InodeLock>,
         name: String,
         file_type: DiskInodeType,
-    ) -> Result<Arc<Self>, ()>
-    where Self: Sized{
+    ) -> Result<Arc<dyn InodeTrait>, ()>
+    where
+        Self: Sized,
+    {
+        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
         if parent_dir.is_file() || name.len() >= 256 {
             Err(())
         } else {
             log::debug!(
                 "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
-                parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
+                // parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
+                parent_dir_specific.get_inode_num_lock(&parent_dir_specific.file_content.read()),
                 &name,
                 file_type
             );
             // If file_type is Directory, alloc first cluster
             let fst_clus = if file_type == DiskInodeType::Directory {
-                let fst_clus = parent_dir
+                // let fst_clus = parent_dir
+                let fst_clus = parent_dir_specific
                     .fs
                     .fat
-                    .alloc(&parent_dir.fs.block_device, 1, None);
+                    // .alloc(&parent_dir.fs.block_device, 1, None);
+                    .alloc(&parent_dir_specific.fs.block_device, 1, None);
                 if fst_clus.is_empty() {
                     return Err(());
                 }
@@ -1470,22 +1485,26 @@ impl InodeTrait for Inode {
             };
             // Genrate directory entries
             let (short_ent, long_ents) =
-                Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
+                // Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
+                Self::gen_dir_ent(parent_dir_specific, parent_inode_lock, &name, fst_clus, file_type);
             // Create directory entry
             let short_ent_offset =
-                match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                // match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                match parent_dir_specific.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
                     Ok(offset) => offset,
                     Err(_) => return Err(()),
                 };
             // Generate current file
-            let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
+            // let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
+            let current_file = Self::from_fat_ent(&parent_dir_specific, &short_ent, short_ent_offset);
             // If file_type is Directory, set first 3 directory entry
             if file_type == DiskInodeType::Directory {
                 // Set hint
                 current_file.file_content.write().hint =
                     2 * core::mem::size_of::<FATDirEnt>() as u32;
                 // Fill content
-                Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
+                // Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
+                Self::fill_empty_dir(&parent_dir_specific, &current_file, fst_clus);
             }
             Ok(current_file)
         }

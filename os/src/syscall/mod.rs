@@ -8,6 +8,7 @@ use core::convert::TryFrom;
 use fs::*;
 use log::{error, info};
 use process::*;
+#[allow(unused)]
 pub use process::{CloneFlags, FutexOption};
 use socket::*;
 
