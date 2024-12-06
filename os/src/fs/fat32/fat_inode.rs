@@ -4,9 +4,9 @@ use crate::fs::fat32::dir_iter::*;
 use crate::fs::fat32::layout::{FATDirEnt, FATDiskInodeType, FATLongDirEnt, FATShortDirEnt};
 use crate::fs::fat32::EasyFileSystem;
 use crate::fs::fat32::{BlockCacheManager, Cache, PageCache, PageCacheManager};
-use crate::fs::inode::{InodeLock, Inode_Middle};
 use crate::fs::inode::InodeTime;
 use crate::fs::inode::InodeTrait;
+use crate::fs::inode::{InodeLock, Inode_Middle};
 use crate::fs::vfs::VFSFileContent;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -68,7 +68,7 @@ pub struct Inode {
     deleted: Mutex<bool>,
 }
 
-impl Inode_Middle for Inode{}
+impl Inode_Middle for Inode {}
 
 impl Drop for Inode {
     /// Before deleting the inode, the file information should be written back to the parent directory
@@ -160,178 +160,6 @@ impl Inode {
 }
 
 impl Inode {
-    pub fn link_par_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: String,
-    ) -> Result<(), ()> {
-        // Genrate directory entries
-        let (short_ent, long_ents) = Self::gen_dir_ent(
-            parent_dir,
-            parent_inode_lock,
-            &name,
-            self.get_first_clus_lock(&self.file_content.read())
-                .unwrap_or(0),
-            *self.file_type.lock(),
-        );
-        // Allocate new directory entry
-        let short_ent_offset =
-            match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
-                Ok(offset) => offset,
-                Err(_) => return Err(()),
-            };
-        // If this is a directory, modify ".."
-        if self.is_dir()
-            && self
-                .modify_parent_dir_entry(
-                    inode_lock,
-                    parent_dir
-                        .get_first_clus_lock(&parent_dir.file_content.read())
-                        .unwrap(),
-                )
-                .is_err()
-        {
-            return Err(());
-        }
-        // Modify parent directory
-        *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
-        Ok(())
-    }
-
-    /// Create a file or a directory from the parent.
-    /// The parent directory will write the new file directory entries.
-    /// # Arguments
-    /// + `parent_dir`: the pointer to parent directory inode
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: new file's name
-    /// + `file_type`: new file's file type
-    /// # Return Value
-    /// If successful, it will return the new file inode
-    /// Otherwise, it will return Error.
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
-    /// Make sure there are no duplicate names in parent_dir.
-    pub fn create_lock(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: String,
-        file_type: DiskInodeType,
-    ) -> Result<Arc<Self>, ()> {
-        if parent_dir.is_file() || name.len() >= 256 {
-            Err(())
-        } else {
-            log::debug!(
-                "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
-                parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
-                &name,
-                file_type
-            );
-            // If file_type is Directory, alloc first cluster
-            let fst_clus = if file_type == DiskInodeType::Directory {
-                let fst_clus = parent_dir
-                    .fs
-                    .fat
-                    .alloc(&parent_dir.fs.block_device, 1, None);
-                if fst_clus.is_empty() {
-                    return Err(());
-                }
-                fst_clus[0]
-            } else {
-                0
-            };
-            // Genrate directory entries
-            let (short_ent, long_ents) =
-                Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
-            // Create directory entry
-            let short_ent_offset =
-                match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
-                    Ok(offset) => offset,
-                    Err(_) => return Err(()),
-                };
-            // Generate current file
-            let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
-            // If file_type is Directory, set first 3 directory entry
-            if file_type == DiskInodeType::Directory {
-                // Set hint
-                current_file.file_content.write().hint =
-                    2 * core::mem::size_of::<FATDirEnt>() as u32;
-                // Fill content
-                Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
-            }
-            Ok(current_file)
-        }
-    }
-    /// Construct a \[u8,11\] corresponding to the short directory entry name
-    /// # Arguments
-    /// + `parent_dir`: The pointer to parent directory
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: File name
-    /// # Return Value
-    /// A short name slice
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    fn gen_short_name_slice(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: &String,
-    ) -> [u8; 11] {
-        let short_name = FATDirEnt::gen_short_name_prefix(name.clone());
-        if short_name.len() == 0 || short_name.find(' ').unwrap_or(8) == 0 {
-            panic!("illegal short name");
-        }
-
-        let mut short_name_slice = [0u8; 11];
-        short_name_slice.copy_from_slice(&short_name.as_bytes()[0..11]);
-
-        let iter = parent_dir.dir_iter(parent_inode_lock, None, DirIterMode::Short, FORWARD);
-        FATDirEnt::gen_short_name_numtail(iter.collect(), &mut short_name_slice);
-        short_name_slice
-    }
-    /// Construct short and long entries name slices
-    /// # Arguments
-    /// + `parent_dir`: The pointer to parent directory
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: File name
-    /// # Return Value
-    /// A pair of a short name slice and a list of long name slices
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    fn gen_name_slice(
-        parent_dir: &Arc<Self>,
-        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
-        name: &String,
-    ) -> ([u8; 11], Vec<[u16; 13]>) {
-        let short_name_slice = Self::gen_short_name_slice(parent_dir, parent_inode_lock, name);
-
-        let long_ent_num = div_ceil!(name.len(), 13);
-        //name.len().div_ceil(13);
-        let mut long_name_slices = Vec::<[u16; 13]>::with_capacity(long_ent_num);
-        for i in 0..long_ent_num {
-            long_name_slices.push(Self::gen_long_name_slice(name, i));
-        }
-
-        (short_name_slice, long_name_slices)
-    }
-    /// Construct a \[u16,13\] corresponding to the `long_ent_num`'th 13-u16 or shorter name slice
-    /// _NOTE_: the first entry is of number 0 for `long_ent_num`
-    /// # Arguments
-    /// + `name`: File name
-    /// + `long_ent_index`: The index of long entry(start from 0)
-    /// # Return Value
-    /// A long name slice
-    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13] {
-        let mut v: Vec<u16> = name.encode_utf16().collect();
-        debug_assert!(long_ent_index * 13 < v.len());
-        while v.len() < (long_ent_index + 1) * 13 {
-            v.push(0);
-        }
-        let start = long_ent_index * 13;
-        let end = (long_ent_index + 1) * 13;
-        v[start..end].try_into().expect("should be able to cast")
-    }
 }
 
 /// Basic Funtions
@@ -1475,12 +1303,7 @@ impl InodeTrait for Inode {
     /// # Warning
     /// This function will not modify its parent directory (since we changed the size of the current file),
     /// we will modify it when it is deleted.
-    fn modify_size_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        diff: isize,
-        clear: bool,
-    ) {
+    fn modify_size_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>, diff: isize, clear: bool) {
         let mut lock = self.file_content.write();
 
         debug_assert!(diff.saturating_add(lock.size as isize) >= 0);
@@ -1551,8 +1374,188 @@ impl InodeTrait for Inode {
         vec
     }
 
-    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
+    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self>
+    where
+        Self: Sized,
+    {
         let inode = Self::from_fat_ent(parent_dir, ent, offset);
         inode
+    }
+
+    fn link_par_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+    ) -> Result<(), ()>
+    where
+        Self: Sized,
+    {
+        // Genrate directory entries
+        let (short_ent, long_ents) = Self::gen_dir_ent(
+            parent_dir,
+            parent_inode_lock,
+            &name,
+            self.get_first_clus_lock(&self.file_content.read())
+                .unwrap_or(0),
+            *self.file_type.lock(),
+        );
+        // Allocate new directory entry
+        let short_ent_offset =
+            match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                Ok(offset) => offset,
+                Err(_) => return Err(()),
+            };
+        // If this is a directory, modify ".."
+        if self.is_dir()
+            && self
+                .modify_parent_dir_entry(
+                    inode_lock,
+                    parent_dir
+                        .get_first_clus_lock(&parent_dir.file_content.read())
+                        .unwrap(),
+                )
+                .is_err()
+        {
+            return Err(());
+        }
+        // Modify parent directory
+        *self.parent_dir.lock() = Some((parent_dir.clone(), short_ent_offset));
+        Ok(())
+    }
+
+    /// Create a file or a directory from the parent.
+    /// The parent directory will write the new file directory entries.
+    /// # Arguments
+    /// + `parent_dir`: the pointer to parent directory inode
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: new file's name
+    /// + `file_type`: new file's file type
+    /// # Return Value
+    /// If successful, it will return the new file inode
+    /// Otherwise, it will return Error.
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
+    /// Make sure there are no duplicate names in parent_dir.
+    fn create_lock(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+        file_type: DiskInodeType,
+    ) -> Result<Arc<Self>, ()>
+    where Self: Sized{
+        if parent_dir.is_file() || name.len() >= 256 {
+            Err(())
+        } else {
+            log::debug!(
+                "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
+                parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
+                &name,
+                file_type
+            );
+            // If file_type is Directory, alloc first cluster
+            let fst_clus = if file_type == DiskInodeType::Directory {
+                let fst_clus = parent_dir
+                    .fs
+                    .fat
+                    .alloc(&parent_dir.fs.block_device, 1, None);
+                if fst_clus.is_empty() {
+                    return Err(());
+                }
+                fst_clus[0]
+            } else {
+                0
+            };
+            // Genrate directory entries
+            let (short_ent, long_ents) =
+                Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
+            // Create directory entry
+            let short_ent_offset =
+                match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {
+                    Ok(offset) => offset,
+                    Err(_) => return Err(()),
+                };
+            // Generate current file
+            let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
+            // If file_type is Directory, set first 3 directory entry
+            if file_type == DiskInodeType::Directory {
+                // Set hint
+                current_file.file_content.write().hint =
+                    2 * core::mem::size_of::<FATDirEnt>() as u32;
+                // Fill content
+                Self::fill_empty_dir(&parent_dir, &current_file, fst_clus);
+            }
+            Ok(current_file)
+        }
+    }
+    /// Construct a \[u8,11\] corresponding to the short directory entry name
+    /// # Arguments
+    /// + `parent_dir`: The pointer to parent directory
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: File name
+    /// # Return Value
+    /// A short name slice
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    fn gen_short_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> [u8; 11] {
+        let short_name = FATDirEnt::gen_short_name_prefix(name.clone());
+        if short_name.len() == 0 || short_name.find(' ').unwrap_or(8) == 0 {
+            panic!("illegal short name");
+        }
+
+        let mut short_name_slice = [0u8; 11];
+        short_name_slice.copy_from_slice(&short_name.as_bytes()[0..11]);
+
+        let iter = parent_dir.dir_iter(parent_inode_lock, None, DirIterMode::Short, FORWARD);
+        FATDirEnt::gen_short_name_numtail(iter.collect(), &mut short_name_slice);
+        short_name_slice
+    }
+    /// Construct short and long entries name slices
+    /// # Arguments
+    /// + `parent_dir`: The pointer to parent directory
+    /// + `parent_inode_lock`: the lock of parent's inode
+    /// + `name`: File name
+    /// # Return Value
+    /// A pair of a short name slice and a list of long name slices
+    /// # Warning
+    /// This function will lock the `file_content` of the parent directory, may cause deadlock
+    fn gen_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> ([u8; 11], Vec<[u16; 13]>) {
+        let short_name_slice = Self::gen_short_name_slice(parent_dir, parent_inode_lock, name);
+
+        let long_ent_num = div_ceil!(name.len(), 13);
+        //name.len().div_ceil(13);
+        let mut long_name_slices = Vec::<[u16; 13]>::with_capacity(long_ent_num);
+        for i in 0..long_ent_num {
+            long_name_slices.push(Self::gen_long_name_slice(name, i));
+        }
+
+        (short_name_slice, long_name_slices)
+    }
+    /// Construct a \[u16,13\] corresponding to the `long_ent_num`'th 13-u16 or shorter name slice
+    /// _NOTE_: the first entry is of number 0 for `long_ent_num`
+    /// # Arguments
+    /// + `name`: File name
+    /// + `long_ent_index`: The index of long entry(start from 0)
+    /// # Return Value
+    /// A long name slice
+    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13] {
+        let mut v: Vec<u16> = name.encode_utf16().collect();
+        debug_assert!(long_ent_index * 13 < v.len());
+        while v.len() < (long_ent_index + 1) * 13 {
+            v.push(0);
+        }
+        let start = long_ent_index * 13;
+        let end = (long_ent_index + 1) * 13;
+        v[start..end].try_into().expect("should be able to cast")
     }
 }

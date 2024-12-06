@@ -346,11 +346,17 @@ impl InodeTrait for Ext4Inode {
         todo!()
     }
 
-    fn get_file_size_rlock(&self, _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>) -> u32 {
+    fn get_file_size_rlock(
+        &self,
+        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+    ) -> u32 {
         todo!()
     }
 
-    fn get_file_size_wlock(&self, _inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>) -> u32 {
+    fn get_file_size_wlock(
+        &self,
+        _inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+    ) -> u32 {
         todo!()
     }
 
@@ -362,7 +368,10 @@ impl InodeTrait for Ext4Inode {
         todo!()
     }
 
-    fn get_inode_num_lock(&self, lock: &spin::RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>) -> Option<u32> {
+    fn get_inode_num_lock(
+        &self,
+        lock: &spin::RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>,
+    ) -> Option<u32> {
         todo!()
     }
 
@@ -409,7 +418,10 @@ impl InodeTrait for Ext4Inode {
         todo!()
     }
 
-    fn get_single_cache(&self, inner_cache_id: usize) -> alloc::sync::Arc<spin::Mutex<super::PageCache>> {
+    fn get_single_cache(
+        &self,
+        inner_cache_id: usize,
+    ) -> alloc::sync::Arc<spin::Mutex<super::PageCache>> {
         todo!()
     }
 
@@ -428,7 +440,11 @@ impl InodeTrait for Ext4Inode {
     fn get_all_files_lock(
         &self,
         inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-    ) -> alloc::vec::Vec<(alloc::string::String, crate::fs::fat32::layout::FATShortDirEnt, u32)> {
+    ) -> alloc::vec::Vec<(
+        alloc::string::String,
+        crate::fs::fat32::layout::FATShortDirEnt,
+        u32,
+    )> {
         todo!()
     }
 
@@ -437,7 +453,15 @@ impl InodeTrait for Ext4Inode {
         inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
         offset: u32,
         length: usize,
-    ) -> Result<alloc::vec::Vec<(alloc::string::String, usize, u64, crate::fs::fat32::layout::FATDiskInodeType)>, ()> {
+    ) -> Result<
+        alloc::vec::Vec<(
+            alloc::string::String,
+            usize,
+            u64,
+            crate::fs::fat32::layout::FATDiskInodeType,
+        )>,
+        (),
+    > {
         todo!()
     }
 
@@ -453,7 +477,10 @@ impl InodeTrait for Ext4Inode {
         todo!()
     }
 
-    fn stat_lock(&self, _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>) -> (i64, i64, i64, i64, u64) {
+    fn stat_lock(
+        &self,
+        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+    ) -> (i64, i64, i64, i64, u64) {
         todo!()
     }
 
@@ -474,11 +501,72 @@ impl InodeTrait for Ext4Inode {
         todo!()
     }
 
-    fn is_empty_dir_lock(&self, inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>) -> bool {
+    fn is_empty_dir_lock(
+        &self,
+        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+    ) -> bool {
         todo!()
     }
 
-    fn from_ent(parent_dir: &alloc::sync::Arc<Self>, ent: &crate::fs::fat32::layout::FATShortDirEnt, offset: u32) -> alloc::sync::Arc<Self> {
+    fn from_ent(
+        parent_dir: &alloc::sync::Arc<Self>,
+        ent: &crate::fs::fat32::layout::FATShortDirEnt,
+        offset: u32,
+    ) -> alloc::sync::Arc<Self> {
+        todo!()
+    }
+
+    fn link_par_lock(
+        &self,
+        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        parent_dir: &alloc::sync::Arc<Self>,
+        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        name: alloc::string::String,
+    ) -> Result<(), ()>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn create_lock(
+        parent_dir: &alloc::sync::Arc<Self>,
+        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        name: alloc::string::String,
+        file_type: crate::fs::DiskInodeType,
+    ) -> Result<alloc::sync::Arc<Self>, ()>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn gen_short_name_slice(
+        parent_dir: &alloc::sync::Arc<Self>,
+        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        name: &alloc::string::String,
+    ) -> [u8; 11]
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn gen_name_slice(
+        parent_dir: &alloc::sync::Arc<Self>,
+        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        name: &alloc::string::String,
+    ) -> ([u8; 11], alloc::vec::Vec<[u16; 13]>)
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn gen_long_name_slice(name: &alloc::string::String, long_ent_index: usize) -> [u16; 13]
+    where
+        Self: Sized,
+    {
         todo!()
     }
 }

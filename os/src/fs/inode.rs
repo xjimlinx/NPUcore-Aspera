@@ -5,23 +5,23 @@ use crate::mm::UserBuffer;
 use crate::syscall::errno::*;
 use core::panic;
 
-use crate::fs::fat32::layout::FATDiskInodeType;
-use dirent::Dirent;
-use ext4::Ext4Inode;
-use fat32::fat_inode::FileContent;
-use fat32::layout::FATShortDirEnt;
-use vfs::VFSDirEnt;
 use crate::fs::fat32::fat_inode::Inode;
+use crate::fs::fat32::layout::FATDiskInodeType;
+use crate::fs::CURR_FS_TYPE;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
-use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+use dirent::Dirent;
 use downcast_rs::*;
-use crate::fs::CURR_FS_TYPE;
+use ext4::Ext4Inode;
+use fat32::fat_inode::FileContent;
+use fat32::layout::FATShortDirEnt;
+use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+use vfs::VFSDirEnt;
 
 pub struct InodeLock;
 
-pub trait Inode_Middle{}
+pub trait Inode_Middle {}
 
 pub type InodeImpl = Inode;
 
@@ -31,292 +31,7 @@ pub enum InodeEnum {
     Ext4(Arc<Ext4Inode>),
 }
 
-impl InodeEnum {
-}
-
-impl InodeTrait for InodeEnum{
-    fn read(&self) -> RwLockReadGuard<InodeLock> {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.read(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.read(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn write(&self) -> RwLockWriteGuard<InodeLock> {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.write(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.write(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_file_type_lock(&self) -> MutexGuard<DiskInodeType> {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.get_file_type_lock(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.get_file_type_lock(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_file_type(&self) -> DiskInodeType {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.get_file_type(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.get_file_type(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_file_size(&self) -> u32 {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.get_file_size(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.get_file_size(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_file_size_rlock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> u32 {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.get_file_size_rlock(_inode_lock),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.get_file_size_rlock(_inode_lock),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_file_size_wlock(&self, _inode_lock: &RwLockWriteGuard<InodeLock>) -> u32 {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.get_file_size_wlock(_inode_lock),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.get_file_size_wlock(_inode_lock),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn is_dir(&self) -> bool {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.is_dir(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.is_dir(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn is_file(&self) -> bool {
-        match CURR_FS_TYPE {
-            FS_Type::Fat32 => {
-                match self {
-                    InodeEnum::Fat32(inode) => inode.is_file(),
-                    _ => panic!(),
-                }
-            }
-            FS_Type::Ext4 => {
-                match self {
-                    InodeEnum::Ext4(inode) => inode.is_file(),
-                    _ => panic!(),
-                }
-            }
-            _ => panic!(),
-        }
-    }
-
-    fn get_inode_num_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32> {
-        todo!()
-    }
-
-    fn get_block_id(
-        &self,
-        lock: &RwLockReadGuard<FileContent>,
-        inner_cache_id: u32,
-    ) -> Option<u32> {
-        todo!()
-    }
-
-    fn read_at_block_cache_rlock(
-        &self,
-        _inode_lock: &RwLockReadGuard<InodeLock>,
-        offset: usize,
-        buf: &mut [u8],
-    ) -> usize {
-        todo!()
-    }
-
-    fn read_at_block_cache_wlock(
-        &self,
-        _inode_lock: &RwLockWriteGuard<InodeLock>,
-        offset: usize,
-        buf: &mut [u8],
-    ) -> usize {
-        todo!()
-    }
-
-    fn read_at_block_cache(&self, offset: usize, buf: &mut [u8]) -> usize {
-        todo!()
-    }
-
-    fn write_at_block_cache_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        offset: usize,
-        buf: &[u8],
-    ) -> usize {
-        todo!()
-    }
-
-    fn write_at_block_cache(&self, offset: usize, buf: &[u8]) -> usize {
-        todo!()
-    }
-
-    fn get_single_cache(&self, inner_cache_id: usize) -> Arc<Mutex<PageCache>> {
-        todo!()
-    }
-
-    fn get_single_cache_lock(
-        &self,
-        _inode_lock: &RwLockReadGuard<InodeLock>,
-        inner_cache_id: usize,
-    ) -> Arc<Mutex<PageCache>> {
-        todo!()
-    }
-
-    fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>> {
-        todo!()
-    }
-
-    fn get_all_files_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-    ) -> Vec<(String, FATShortDirEnt, u32)> {
-        todo!()
-    }
-
-    fn dirent_info_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        offset: u32,
-        length: usize,
-    ) -> Result<Vec<(String, usize, u64, FATDiskInodeType)>, ()> {
-        todo!()
-    }
-
-    fn delete_self_dir_ent(&self) -> Result<(), ()> {
-        todo!()
-    }
-
-    fn unlink_lock(
-        &self,
-        _inode_lock: &RwLockWriteGuard<InodeLock>,
-        delete: bool,
-    ) -> Result<(), isize> {
-        todo!()
-    }
-
-    fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64) {
-        todo!()
-    }
-
-    fn time(&self) -> MutexGuard<InodeTime> {
-        todo!()
-    }
-
-    fn oom(&self) -> usize {
-        todo!()
-    }
-
-    fn modify_size_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        diff: isize,
-        clear: bool,
-    ) {
-        todo!()
-    }
-
-    fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool {
-        todo!()
-    }
-
-    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
-        todo!()
-    }
-}
+impl InodeEnum {}
 
 #[allow(unused)]
 pub trait InodeTrait: DowncastSync {
@@ -330,11 +45,8 @@ pub trait InodeTrait: DowncastSync {
     fn is_dir(&self) -> bool;
     fn is_file(&self) -> bool;
     fn get_inode_num_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32>;
-    fn get_block_id(
-        &self,
-        lock: &RwLockReadGuard<FileContent>,
-        inner_cache_id: u32,
-    ) -> Option<u32>;
+    fn get_block_id(&self, lock: &RwLockReadGuard<FileContent>, inner_cache_id: u32)
+        -> Option<u32>;
     fn read_at_block_cache_rlock(
         &self,
         _inode_lock: &RwLockReadGuard<InodeLock>,
@@ -382,17 +94,49 @@ pub trait InodeTrait: DowncastSync {
     fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64);
     fn time(&self) -> MutexGuard<InodeTime>;
     fn oom(&self) -> usize;
-    fn modify_size_lock(
-        &self,
-        inode_lock: &RwLockWriteGuard<InodeLock>,
-        diff: isize,
-        clear: bool,
-    );
+    fn modify_size_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>, diff: isize, clear: bool);
     fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool;
 
     // 从现有的目录项创建新的文件
-    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self>;
+    fn from_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self>
+    where
+        Self: Sized;
+    fn link_par_lock(
+        &self,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+    ) -> Result<(), ()>
+    where
+        Self: Sized;
+    fn create_lock(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+        file_type: DiskInodeType,
+    ) -> Result<Arc<Self>, ()>
+    where
+        Self: Sized;
+    fn gen_short_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> [u8; 11]
+    where
+        Self: Sized;
+    fn gen_name_slice(
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> ([u8; 11], Vec<[u16; 13]>)
+    where
+        Self: Sized;
+    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13]
+    where
+        Self: Sized;
 }
+impl_downcast!(sync InodeTrait);
 
 pub struct InodeTime {
     create_time: u64,
@@ -452,8 +196,8 @@ pub struct OSInode {
     writable: bool,
     special_use: bool,
     append: bool,
-    // inner: Arc<dyn InodeTrait>,
-    inner: Arc<InodeImpl>,
+    inner: Arc<dyn InodeTrait>,
+    // inner: Arc<InodeImpl>,
     offset: Mutex<usize>,
     dirnode_ptr: Arc<Mutex<Weak<DirectoryTreeNode>>>,
 }
