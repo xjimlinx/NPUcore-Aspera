@@ -572,4 +572,8 @@ impl InodeTrait for Ext4Inode {
     {
         todo!()
     }
+
+    fn as_any(&self) -> &dyn core::any::Any {
+        self
+    }
 }

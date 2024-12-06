@@ -3,6 +3,7 @@ use crate::fs::file_trait::File;
 use crate::fs::*;
 use crate::mm::UserBuffer;
 use crate::syscall::errno::*;
+use core::any::Any;
 use core::{any, panic};
 
 use crate::fs::fat32::fat_inode::Inode;
@@ -142,14 +143,15 @@ pub trait InodeTrait: DowncastSync {
     fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13]
     where
         Self: Sized;
+    fn as_any(&self) -> &dyn Any;
 }
 impl_downcast!(sync InodeTrait);
 
-impl<T: InodeTrait + 'static> InodeTraitExt for T {
-    fn as_any(&self) -> &dyn any::Any {
-        self
-    }
-}
+// impl<T: InodeTrait + 'static> InodeTraitExt for T {
+//     fn as_any(&self) -> &dyn any::Any {
+//         self
+//     }
+// }
 
 pub struct InodeTime {
     create_time: u64,

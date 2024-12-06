@@ -11,6 +11,8 @@ use crate::fs::vfs::VFSFileContent;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use downcast_rs::{Downcast, DowncastSync};
+use core::any::Any;
 use core::convert::TryInto;
 use core::ops::Mul;
 use core::panic;
@@ -1374,10 +1376,11 @@ impl InodeTrait for Inode {
     }
 
     fn from_ent(&self, parent_dir: &Arc<dyn InodeTrait>, ent: &FATShortDirEnt, offset: u32) -> Arc<dyn InodeTrait>
-    where
-        Self: Sized,
+    // where
+    //     Self: Sized,
     {
-        let parent_dir_specific = (&**parent_dir).as_any().downcast_ref::<Arc<Inode>>().unwrap();
+        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().unwrap();
+        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().expect("wtf");
         // let inode = Self::from_fat_ent(parent_dir, ent, offset);
         // let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
         let inode = Self::from_fat_ent(parent_dir_specific, ent, offset);
@@ -1576,5 +1579,9 @@ impl InodeTrait for Inode {
         let start = long_ent_index * 13;
         let end = (long_ent_index + 1) * 13;
         v[start..end].try_into().expect("should be able to cast")
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
