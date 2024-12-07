@@ -1,4 +1,4 @@
-use super::fat32::DiskInodeType;
+use crate::fs::inode::DiskInodeType;
 use crate::{mm::UserBuffer, syscall::errno::ENOTTY};
 use __alloc::string::String;
 use alloc::{
