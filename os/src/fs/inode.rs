@@ -220,8 +220,8 @@ pub struct OSInode {
 }
 
 impl OSInode {
-    // pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
-    pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
+    pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
+    // pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
             writable: true,
