@@ -15,7 +15,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use dirent::Dirent;
 use downcast_rs::*;
-use ext4::Ext4Inode;
+use ext4::{EasyFileSystem, Ext4Inode};
 use fat32::fat_inode::FileContent;
 use fat32::layout::FATShortDirEnt;
 use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -37,7 +37,9 @@ pub enum InodeEnum {
 impl InodeEnum {}
 
 trait InodeTraitExt: InodeTrait {
-    fn as_any(&self) -> &dyn any::Any;
+    // fn as_any(&self) -> &dyn any::Any;
+    fn fs(&self) -> Arc<EasyFileSystem>;
+    fn as_inode(&self) -> Option<&Inode>;
 }
 
 #[allow(unused)]

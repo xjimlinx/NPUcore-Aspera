@@ -18,6 +18,7 @@ use core::ops::Mul;
 use core::panic;
 use spin::*;
 
+
 pub struct FileContent {
     /// For FAT32, size is a value computed from FAT.
     /// You should iterate around the FAT32 to get the size.
@@ -1380,10 +1381,26 @@ impl InodeTrait for Inode {
     //     Self: Sized,
     {
         // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().unwrap();
-        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().expect("wtf");
+        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().expect("wtf");
         // let inode = Self::from_fat_ent(parent_dir, ent, offset);
-        // let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
-        let inode = Self::from_fat_ent(parent_dir_specific, ent, offset);
+        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        // let shit = parent_dir.clone();
+        let inode = Self::from_fat_ent(&parent_dir_specific, ent, offset);
+        // Self::new(
+        //     ent.get_first_clus(),
+        //     if ent.is_dir() {
+        //         DiskInodeType::Directory
+        //     } else {
+        //         DiskInodeType::File
+        //     },
+        //     if ent.is_file() {
+        //         Some(ent.file_size)
+        //     } else {
+        //         None
+        //     },
+        //     Some((parent_dir.clone(), offset)),
+        //     parent_dir.fs.clone(),
+        // )
         inode
     }
 
@@ -1397,11 +1414,12 @@ impl InodeTrait for Inode {
 // where
         // Self: Sized,
     {
-        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
+        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
+        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
         // Genrate directory entries
         let (short_ent, long_ents) = Self::gen_dir_ent(
             // parent_dir,
-            parent_dir_specific,
+            &parent_dir_specific,
             parent_inode_lock,
             &name,
             self.get_first_clus_lock(&self.file_content.read())
@@ -1460,7 +1478,8 @@ impl InodeTrait for Inode {
     where
         Self: Sized,
     {
-        let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
+        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
+        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
         if parent_dir.is_file() || name.len() >= 256 {
             Err(())
         } else {
@@ -1489,7 +1508,7 @@ impl InodeTrait for Inode {
             // Genrate directory entries
             let (short_ent, long_ents) =
                 // Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
-                Self::gen_dir_ent(parent_dir_specific, parent_inode_lock, &name, fst_clus, file_type);
+                Self::gen_dir_ent(&parent_dir_specific, parent_inode_lock, &name, fst_clus, file_type);
             // Create directory entry
             let short_ent_offset =
                 // match parent_dir.create_dir_ent(parent_inode_lock, short_ent, long_ents) {

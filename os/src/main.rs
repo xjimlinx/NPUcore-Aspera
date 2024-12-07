@@ -5,6 +5,8 @@
 #![feature(asm_const)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
+// xein add this for inodetrait
+#![feature(trait_upcasting)]
 // #![feature(global_asm)]
 #![feature(asm_experimental_arch)]
 #![feature(panic_info_message)]
