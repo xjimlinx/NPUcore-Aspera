@@ -8,7 +8,7 @@ os/src/linker.ld
 .VSCodeCounter/
 
 # etc
-os/2024testcase/*
+os/2024testcase/
 
 # kernel build
 os/target/
@@ -34,3 +34,4 @@ Doc/**/*.org
 Doc/**/*.tex
 Doc/**/*.jpg
 Doc/**/*.png
+os/qemu.log
