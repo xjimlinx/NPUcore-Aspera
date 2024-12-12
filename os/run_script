@@ -1,11 +1,20 @@
 #!/usr/bin/expect -f
 # set qemu_bin [lindex $argv 0];
 # set qemu_arg [lrange $argv 1 end];
+
+# 设置超时时间为无限
 set timeout -1
+# 启动一个新进程，将argv传递给spawn
+# *表示解包，将argv的每个元素传递给spawn
 spawn {*}$argv
+# 从argv中获取第一个参数，即被执行的程序名
 set bin_name [lindex $argv 0];
+# 初始化变量，用于存储sleep的时间
 set sleep_time 0
 
+# 定义名为test_cmd的过程，接受两个参数：
+# + file_name：要发送的命令
+# + num：sleep的时间
 proc test_cmd {file_name num} {
 #    upvar 2 $sleep_time sleep_time
     expect " \[1m \[32mNPUCore \[0m: \[1m \[34m/ \[0m#"
