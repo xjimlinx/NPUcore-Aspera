@@ -69,7 +69,7 @@ fi
 try_copy(){
     if [ -d $1 ]
     then
-        echo copying $1 ';'
+        echo copying $1 to $2 ';'
         for programname in $(ls -A $1)
         do
             "$SUDO" cp -fr "$1"/"$programname" $2
@@ -79,18 +79,25 @@ try_copy(){
     fi
 }
 
+copy_2024_testcase(){
+    echo "copy test case to ${U_DIR}/fs"
+    "$SUDO" mkdir -p ${U_DIR}/fs/2024testcase
+    "$SUDO" cp -fr ./2024testcase/* ${U_DIR}/fs/2024testcase/
+}
+
 for programname in $(ls ../user/src/bin)
 do
     "$SUDO" cp -r ../user/target/${TARGET}/${MODE}/${programname%.rs} ${U_DIR}/fs/${programname%.rs}
 done
 
 if [ ! -f ${U_DIR}/fs/syscall ]
-then    
+then
     "$SUDO" mkdir -p ${U_DIR}/fs/syscall
 fi
 
 try_copy ../user/user_C_program/user/build/${ARCH}  ${U_DIR}/fs/syscall
 try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_DIR}/fs/
+copy_2024_testcase
 # try_copy ../user/disk/${ARCH} ${U_DIR}/fs/
 
 "$SUDO" umount ${U_DIR}/fs
