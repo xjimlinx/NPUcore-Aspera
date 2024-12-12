@@ -7,6 +7,9 @@ os/src/linker.ld
 .vscode/
 .VSCodeCounter/
 
+# etc
+os/2024testcase/*
+
 # kernel build
 os/target/
 
@@ -23,7 +26,8 @@ os/logs/
 os/src/link_app.S
 os/last-*
 user/.ccls-cache/
-util/qemu-2k500/gz/rootfs-ubifs-ze.img 
+util/qemu-2k500/gz/rootfs-ubifs-ze.img
+util/qemu-2k500/gz/qemu.log
 
 # Doc .org & .tex
 Doc/**/*.org
