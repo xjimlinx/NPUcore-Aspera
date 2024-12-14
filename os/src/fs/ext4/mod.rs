@@ -1,21 +1,18 @@
-pub(crate) mod dir_iter;
-mod bitmap;
-mod efs;
-mod ext4_inode;
 mod block_group;
-mod superblock;
-mod block;
+pub(crate) mod dir_iter;
+mod ext4_inode;
+pub mod ext4fs;
 pub mod layout;
-pub use ext4_inode::*;
+mod superblock;
 #[allow(unused)]
 pub use super::cache::{BlockCacheManager, BufferCache, Cache, PageCache, PageCacheManager};
 pub use crate::drivers::block::BlockDevice;
-use bitmap::Ext4;
 #[allow(unused)]
-pub use efs::EasyFileSystem;
+// pub use efs::EasyFileSystem;
 // pub use layout::DiskInodeType;
 #[allow(unused)]
 pub use crate::fs::fat32::fat_inode::Inode;
+pub use ext4_inode::*;
 #[allow(unused)]
 pub use ext4_rs::fuse_interface::*;
 
