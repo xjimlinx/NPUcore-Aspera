@@ -1,8 +1,8 @@
 use super::layout::{FATDirEnt, FATShortDirEnt};
-use crate::fs::inode::InodeLock;
 use crate::fs::fat32::Inode;
-use alloc::string::String;
+use crate::fs::inode::InodeLock;
 use crate::fs::inode::InodeTrait;
+use alloc::string::String;
 use spin::*;
 
 /// `DirIterMode` describe `DirIter`'s iterate mode
