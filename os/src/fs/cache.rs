@@ -26,6 +26,7 @@ pub trait Cache {
 }
 
 const PRIORITY_UPPERBOUND: usize = 1;
+// 缓存单位大小与块大小相同
 const BUFFER_SIZE: usize = BLOCK_SZ;
 const PAGE_BUFFERS: usize = PAGE_SIZE / BUFFER_SIZE;
 
@@ -39,26 +40,37 @@ const CACHEPOOLPAGE: usize = if (CACHEPOOLSIZE >> 3) > 1 {
     1
 };
 
+/// 缓冲区缓存
 pub struct BufferCache {
     /// Every time kernel tried to alloc this buffer this number will increase 1(at most 3)
     /// When no free cache lefted this number will decrease 1(at least 0)
     /// When it's 0 and Arc's strong count is 1, this buffer will be writed back
     priority: usize,
-    /// ***If block_id is usize::Max***, we assume it is an unused buffer.
+    /// 如果 block_id == usize::Max, 则认为这个缓存没有被使用
     block_id: usize,
     dirty: bool,
+    // 缓冲区的数据
     buffer: &'static mut [u8; BUFFER_SIZE],
 }
 
 impl Cache for BufferCache {
+    /// 在缓冲区中，基于指定偏移量读取一个类型为T的数据。
+    ///
+    /// 将该数据通过引用传递给闭包（匿名函数）f
     fn read<T, V>(&self, offset: usize, f: impl FnOnce(&T) -> V) -> V {
+        // 检查从offset开始读取的数据是否超出缓冲区大小
         debug_assert!(offset.saturating_add(core::mem::size_of::<T>()) <= BUFFER_SIZE);
         f(unsafe {
             self.buffer
+                // 获取缓冲区的裸指针
                 .as_ptr()
+                // 指针加上偏移量
                 .add(offset)
+                // 将指针转换为类型`T`的指针
                 .cast::<T>()
+                // 将裸指针转换为引用
                 .as_ref()
+                // 确保非None
                 .unwrap()
         })
     }
@@ -97,37 +109,60 @@ impl BufferCache {
 pub struct BlockCacheManager {
     /// just hold all pages alloced
     _hold: Vec<Arc<FrameTracker>>,
+    /// 缓存池
     cache_pool: Vec<Arc<Mutex<BufferCache>>>,
 }
 
 impl BlockCacheManager {
+    /// 缓冲区缓存释放函数
     pub fn oom(&self, block_device: &Arc<dyn BlockDevice>) {
         for buffer_cache in &self.cache_pool {
+            // Arc强引用计数大于1，
+            // 也就是说这个对象不仅被上下文引用，还被其他地方所引用
+            // 所以不能释放，继续循环
             if Arc::strong_count(buffer_cache) > 1 {
                 continue;
             }
+            // 否则获取这个缓冲区缓存
             let mut locked = buffer_cache.lock();
             if locked.priority > 0 {
                 locked.priority -= 1;
             } else {
+                // 获取块号
                 let block_id = locked.block_id;
+                // 获取缓存
                 let buf = locked.buffer.as_ref();
+                // 如果该块被改动过
                 if locked.dirty {
+                    // 写入块设备
                     block_device.write_block(block_id, buf);
+                    // 清除改动标志位
                     locked.dirty = false;
                 }
+                // 释放缓冲块，将其block_id设置为usize::MAX
                 locked.block_id = usize::MAX;
             }
         }
     }
+    /// 为给定的块设备分配一个缓冲区缓存。
+    /// # 参数
+    /// - `block_device`: 一个指向块设备的引用，类型为 `Arc<dyn BlockDevice>`。
+    /// # 返回值
+    /// 返回一个指向 `BufferCache` 的引用，类型为 `Arc<Mutex<BufferCache>>`。
     fn alloc_buffer_cache(&self, block_device: &Arc<dyn BlockDevice>) -> Arc<Mutex<BufferCache>> {
+        // 进入循环，尝试找到一个可用的缓冲区缓存。
         loop {
+            // 遍历缓存池中的所有缓冲区缓存。
             for buffer_cache in &self.cache_pool {
+                // 对每个缓冲区缓存检查其 `block_id` 是否为 `usize::MAX`。
                 let locked = buffer_cache.lock();
+                // 如果是，表示该缓冲区缓存是空闲的，可以使用。
                 if locked.block_id == usize::MAX {
+                    // 返回该缓冲区缓存的克隆
                     return buffer_cache.clone();
                 }
             }
+            // 找不到空闲的缓冲区缓存，调用oom方法释放缓冲区然后再次进入循环
             self.oom(block_device);
         }
     }
@@ -152,6 +187,7 @@ impl BlockCacheManager {
             cache_pool,
         }
     }
+    // 从缓存中获取一个缓存块
     pub fn try_get_block_cache(&self, block_id: usize) -> Option<Arc<Mutex<BufferCache>>> {
         for buffer_cache in &self.cache_pool {
             let mut locked = buffer_cache.lock();
@@ -165,10 +201,21 @@ impl BlockCacheManager {
         None
     }
 
-    pub fn get_block_cache( &self, block_id: usize, block_device: &Arc<dyn BlockDevice>, ) -> Arc<Mutex<BufferCache>> {
+    /// 获取块缓存
+    /// # 参数
+    /// + `block_id`: 块号
+    /// + `block_device`: 指向块设备的指针
+    pub fn get_block_cache(
+        &self,
+        block_id: usize,
+        block_device: &Arc<dyn BlockDevice>,
+    ) -> Arc<Mutex<BufferCache>> {
         match self.try_get_block_cache(block_id) {
+            // 如果缓存中有该块，就从缓存中获取并返回
             Some(block_cache) => block_cache,
+            // 如果缓存中没有该块，就从磁盘中读取
             None => {
+                // 获取
                 let buffer_cache = self.alloc_buffer_cache(block_device);
                 let mut locked = buffer_cache.lock();
                 locked.read_block(block_id, block_device);
