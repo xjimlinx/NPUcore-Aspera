@@ -1,15 +1,8 @@
-use super::fat32::EasyFileSystem;
+use super::ext4::ext4fs::Ext4FileSystem;
 use super::inode::DiskInodeType;
 use super::CURR_FS_TYPE;
+use super::{fat32::EasyFileSystem, vfs::VFS};
 // use super::ext4::{}; TODO:
-use alloc::{
-    collections::BTreeMap,
-    string::{String, ToString},
-    sync::{Arc, Weak},
-    vec::Vec,
-};
-use lazy_static::*;
-use spin::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 use super::{
     cache::BlockCacheManager,
     dev::{null::Null, tty::Teletype, zero::Zero},
@@ -18,19 +11,28 @@ use super::{
     layout::OpenFlags,
     Hwclock,
 };
-use crate::{
-    drivers::BLOCK_DEVICE,
-    fs::{
-        inode::{InodeImpl, OSInode},
-        filesystem::FS_Type,
-    },
-};
 #[cfg(feature = "oom_handler")]
 use crate::mm::tlb_invalidate;
 use crate::syscall::errno::*;
+use crate::{
+    drivers::BLOCK_DEVICE,
+    fs::{
+        filesystem::FS_Type,
+        inode::{InodeImpl, OSInode},
+    },
+};
+use alloc::{
+    collections::BTreeMap,
+    string::{String, ToString},
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use lazy_static::*;
+use spin::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 
 lazy_static! {
-    pub static ref FILE_SYSTEM: Arc<EasyFileSystem> = EasyFileSystem::open(
+    // pub static ref FILE_SYSTEM: Arc<dyn VFS> = EasyFileSystem::open(
+    pub static ref FILE_SYSTEM: Arc<dyn VFS> = Ext4FileSystem::open(
         BLOCK_DEVICE.clone(),
         Arc::new(Mutex::new(BlockCacheManager::new()))
     );
@@ -111,7 +113,12 @@ impl Drop for DirectoryTreeNode {
 }
 
 impl DirectoryTreeNode {
-    pub fn new( name: String, filesystem: Arc<FileSystem>, file: Arc<dyn File>, father: Weak<Self>, ) -> Arc<Self> {
+    pub fn new(
+        name: String,
+        filesystem: Arc<FileSystem>,
+        file: Arc<dyn File>,
+        father: Weak<Self>,
+    ) -> Arc<Self> {
         let node = Arc::new(DirectoryTreeNode {
             spe_usage: Mutex::new(0),
             name,
@@ -186,7 +193,10 @@ impl DirectoryTreeNode {
     }
 
     // 缓存该文件夹下的所有子文件到lock中
-    fn cache_all_subfile( &self,lock: &mut RwLockWriteGuard<Option<BTreeMap<String, Arc<Self>>>>,) -> Result<(), isize> {
+    fn cache_all_subfile(
+        &self,
+        lock: &mut RwLockWriteGuard<Option<BTreeMap<String, Arc<Self>>>>,
+    ) -> Result<(), isize> {
         if lock.is_some() {
             return Ok(());
         }
@@ -213,7 +223,11 @@ impl DirectoryTreeNode {
     }
 
     // 尝试获取子文件
-    fn try_to_open_subfile( &self, name: &str, lock: &mut RwLockWriteGuard<Option<BTreeMap<String, Arc<Self>>>>,) -> Result<Arc<Self>, isize> {
+    fn try_to_open_subfile(
+        &self,
+        name: &str,
+        lock: &mut RwLockWriteGuard<Option<BTreeMap<String, Arc<Self>>>>,
+    ) -> Result<Arc<Self>, isize> {
         match self.cache_all_subfile(lock) {
             Ok(_) => {}
             Err(errno) => return Err(errno),
@@ -274,7 +288,12 @@ impl DirectoryTreeNode {
     }
 
     // 模拟文件系统的 open 调用
-    pub fn open( &self, path: &str, flags: OpenFlags, special_use: bool,) -> Result<Arc<dyn File>, isize> {
+    pub fn open(
+        &self,
+        path: &str,
+        flags: OpenFlags,
+        special_use: bool,
+    ) -> Result<Arc<dyn File>, isize> {
         log::debug!("[open]: cwd: {}, path: {}", self.get_cwd(), path);
 
         const BUSYBOX_PATH: &str = "/busybox";
