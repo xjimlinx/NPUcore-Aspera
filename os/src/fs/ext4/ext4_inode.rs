@@ -576,4 +576,10 @@ impl InodeTrait for Ext4Inode {
     fn as_any(&self) -> &dyn core::any::Any {
         self
     }
+
+    fn root_inode(efs: &alloc::sync::Arc<dyn crate::fs::vfs::VFS>) -> alloc::sync::Arc<Self>
+    where
+        Self: Sized {
+        todo!()
+    }
 }
