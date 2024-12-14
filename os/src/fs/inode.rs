@@ -8,6 +8,7 @@ use core::{any, panic};
 
 use crate::fs::fat32::fat_inode::Inode;
 use crate::fs::fat32::layout::FATDiskInodeType;
+use crate::fs::vfs::VFS;
 #[allow(unused)]
 use crate::fs::CURR_FS_TYPE;
 use alloc::string::ToString;
@@ -15,7 +16,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use dirent::Dirent;
 use downcast_rs::*;
-use ext4::{EasyFileSystem, Ext4Inode};
+use ext4::Ext4Inode;
 use fat32::fat_inode::FileContent;
 use fat32::layout::FATShortDirEnt;
 use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -35,12 +36,6 @@ pub enum InodeEnum {
 }
 
 impl InodeEnum {}
-
-trait InodeTraitExt: InodeTrait {
-    // fn as_any(&self) -> &dyn any::Any;
-    fn fs(&self) -> Arc<EasyFileSystem>;
-    fn as_inode(&self) -> Option<&Inode>;
-}
 
 #[allow(unused)]
 pub trait InodeTrait: DowncastSync {
@@ -107,7 +102,12 @@ pub trait InodeTrait: DowncastSync {
     fn is_empty_dir_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>) -> bool;
 
     // 从现有的目录项创建新的文件
-    fn from_ent(&self, parent_dir: &Arc<dyn InodeTrait>, ent: &FATShortDirEnt, offset: u32) -> Arc<dyn InodeTrait>;
+    fn from_ent(
+        &self,
+        parent_dir: &Arc<dyn InodeTrait>,
+        ent: &FATShortDirEnt,
+        offset: u32,
+    ) -> Arc<dyn InodeTrait>;
     // where
     //     Self: Sized;
     fn link_par_lock(
@@ -118,7 +118,7 @@ pub trait InodeTrait: DowncastSync {
         name: String,
     ) -> Result<(), ()>;
     // where
-        // Self: Sized;
+    // Self: Sized;
     fn create_lock(
         &self,
         parent_dir: &Arc<dyn InodeTrait>,
@@ -127,7 +127,7 @@ pub trait InodeTrait: DowncastSync {
         file_type: DiskInodeType,
     ) -> Result<Arc<dyn InodeTrait>, ()>;
     // where
-        // Self: Sized;
+    // Self: Sized;
     fn gen_short_name_slice(
         parent_dir: &Arc<Self>,
         parent_inode_lock: &RwLockWriteGuard<InodeLock>,
@@ -146,14 +146,11 @@ pub trait InodeTrait: DowncastSync {
     where
         Self: Sized;
     fn as_any(&self) -> &dyn Any;
+    fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self>
+    where
+        Self: Sized;
 }
 impl_downcast!(sync InodeTrait);
-
-// impl<T: InodeTrait + 'static> InodeTraitExt for T {
-//     fn as_any(&self) -> &dyn any::Any {
-//         self
-//     }
-// }
 
 pub struct InodeTime {
     create_time: u64,
@@ -221,7 +218,7 @@ pub struct OSInode {
 
 impl OSInode {
     pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
-    // pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
+        // pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
             writable: true,
@@ -466,7 +463,9 @@ impl File for OSInode {
     }
     fn create(&self, name: &str, file_type: DiskInodeType) -> Result<Arc<dyn File>, isize> {
         let inode_lock = self.inner.write();
-        let new_file = self.inner.create_lock(&self.inner, &inode_lock, name.to_string(), file_type);
+        let new_file =
+            self.inner
+                .create_lock(&self.inner, &inode_lock, name.to_string(), file_type);
         if let Ok(inner) = new_file {
             Ok(Arc::new(Self {
                 readable: true,
