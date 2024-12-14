@@ -6,39 +6,41 @@ use crate::arch;
 
 use super::{layout::BPB, Cache};
 use super::{BlockCacheManager, BlockDevice, Fat};
+use crate::fs::vfs::VFS;
 use alloc::{sync::Arc, vec::Vec};
 
 pub struct EasyFileSystem {
-    /// Partition/Device the FAT32 is hosted on.
+    /// 块设备，实际上是一个指向硬件设备的指针
     pub block_device: Arc<dyn BlockDevice>,
-    /// FAT information
+    /// FAT32文件系统的FAT表
     pub fat: Fat,
-    /// The first data sector beyond the root directory
+    /// 在root目录之后的第一个数据扇区
     pub data_area_start_block: u32,
     /// This is set to the cluster number of the first cluster of the root directory,
-    /// usually 2 but not required to be 2.
+    /// 根目录的第一个簇的簇号，通常为2，但不一定是2
     pub root_clus: u32,
-    /// sector per cluster, usually 8 for SD card
+    /// 每簇扇区数，对于SD卡来说通常为8
     pub sec_per_clus: u8,
-    /// Bytes per sector, 512 for SD card
+    /// 每扇区字节数，对于SD卡来说通常为512
     pub byts_per_sec: u16,
 }
 
+// 以下三个函数实际上都没有用到，都直接使用fat内部的函数了
 // export implementation of methods from FAT.
-impl EasyFileSystem {
-    #[inline(always)]
-    pub fn this_fat_ent_offset(&self, n: u32) -> u32 {
-        self.fat.this_fat_ent_offset(n) as u32
-    }
-    #[inline(always)]
-    pub fn this_fat_sec_num(&self, n: u32) -> u32 {
-        self.fat.this_fat_sec_num(n) as u32
-    }
-    #[inline(always)]
-    pub fn get_next_clus_num(&self, result: u32) -> u32 {
-        self.fat.get_next_clus_num(result, &self.block_device)
-    }
-}
+// impl EasyFileSystem {
+//     #[inline(always)]
+//     pub fn this_fat_ent_offset(&self, n: u32) -> u32 {
+//         self.fat.this_fat_ent_offset(n) as u32
+//     }
+//     #[inline(always)]
+//     pub fn this_fat_sec_num(&self, n: u32) -> u32 {
+//         self.fat.this_fat_sec_num(n) as u32
+//     }
+//     #[inline(always)]
+//     pub fn get_next_clus_num(&self, result: u32) -> u32 {
+//         self.fat.get_next_clus_num(result, &self.block_device)
+//     }
+// }
 
 impl EasyFileSystem {
     pub fn first_data_sector(&self) -> u32 {
@@ -51,39 +53,55 @@ impl EasyFileSystem {
 }
 
 impl EasyFileSystem {
-    /// For a given cluster number, calculate its first sector
-    /// # Arguments
-    /// + `clus_num`: cluster number
-    /// # Return Value
-    /// sector number
+    /// 对于一个给定的簇号，计算其第一个扇区
+    /// # 参数
+    /// + `clus_num`: 簇号
+    /// # 返回值
+    /// 扇区号
     #[inline(always)]
     pub fn first_sector_of_cluster(&self, clus_num: u32) -> u32 {
+        // 首先比较每簇扇区数中1的数量，因为是8,所以只有1个（0b100）
         debug_assert_eq!(self.sec_per_clus.count_ones(), 1);
+        // 然后比较簇号，看是否大于等于2,因为前两个簇0和1已经被占用
         debug_assert!(clus_num >= 2);
+        // 获取第一个数据扇区
         let start_block = self.data_area_start_block;
+        // 获取偏移量
+        // 计算公式为 ：
+        // (簇号 - 2) * 每簇扇区数 =
+        // (簇号 - 2) * 8
         let offset_blocks = (clus_num - 2) * self.sec_per_clus as u32;
+        // 第一个扇区号即为
+        // root目录后的第一个数据扇区号 + 偏移量
         start_block + offset_blocks
     }
-    /// Open the filesystem object.
-    /// # Arguments
-    /// + `block_device`: pointer of hardware device
+    /// 打开文件系统对象
+    /// # 参数
+    /// + `block_device`: 指向硬件设备（存储设备）的指针
     /// + `index_cache_mgr`: fat cache manager
     pub fn open(
         block_device: Arc<dyn BlockDevice>,
         index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
     ) -> Arc<Self> {
-        // read SuperBlock
+        // 为fat_cache_mgr赋值
         let fat_cache_mgr = index_cache_mgr.clone();
         index_cache_mgr
             .lock()
+            // 获取第0块的缓存
             .get_block_cache(0, &block_device)
             .lock()
+            // 将第0块映射为BPB结构体
             .read(0, |super_block: &BPB| {
                 // ***************Do NOT change this LINE!****************
+                // 获取超级块（BPB）的每扇区字节数
                 let byts_per_sec = super_block.byts_per_sec;
+                // 如果每扇区字节数与预想的（la64模块内的设置为2048）不同，则触发panic
                 debug_assert!(byts_per_sec as usize == arch::BLOCK_SZ);
+                // 如果缓存单位不能被每扇区字节数整除，触发panic
                 debug_assert!(BlockCacheManager::CACHE_SZ % byts_per_sec as usize == 0);
+                // 如果超级块（BPB）非法，则报错
                 debug_assert!(super_block.is_valid(), "Error loading EFS!");
+                // 创建efs实例
                 let efs = Self {
                     block_device,
                     fat: Fat::new(
@@ -114,5 +132,21 @@ impl EasyFileSystem {
             }
         }
         block_ids
+    }
+}
+
+impl VFS for EasyFileSystem {
+    fn alloc_blocks(&self, blocks: usize) -> Vec<usize> {
+        self.alloc_blocks(blocks)
+    }
+    fn open(
+        &self,
+        block_device: Arc<dyn BlockDevice>,
+        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+    ) -> Arc<Self>
+    where
+        Self: Sized,
+    {
+        self.open(block_device, index_cache_mgr)
     }
 }
