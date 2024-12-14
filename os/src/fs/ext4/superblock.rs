@@ -135,8 +135,10 @@ impl Ext4Superblock {
         self.blocks_per_group
     }
 
-    /// Returns the size of block.
+    /// 块大小
     pub fn block_size(&self) -> u32 {
+        // 1024 左移指定位数
+        // 也就是说最小是1KiB
         1024 << self.log_block_size
     }
 
@@ -146,7 +148,7 @@ impl Ext4Superblock {
     }
 
     /// Returns the first data block.
-    pub fn first_data_block(&self) -> u32{
+    pub fn first_data_block(&self) -> u32 {
         self.first_data_block
     }
 
@@ -204,13 +206,32 @@ impl Ext4Superblock {
     }
 
     pub fn set_free_blocks_count(&mut self, free_blocks: u64) {
-        self.free_blocks_count_lo = (free_blocks & 0xffffffff) as u32; 
+        self.free_blocks_count_lo = (free_blocks & 0xffffffff) as u32;
 
         self.free_blocks_count_hi = (free_blocks >> 32) as u32;
     }
 
+    /// xein add this, maybe wrong
+    pub fn get_inode_table_start(&self) -> u32 {
+        // 计算块的大小
+        let block_size = 1024 << self.log_block_size;
+
+        // 每组的 inode 表大小（单位：字节）
+        let inode_table_size = self.inodes_per_group * self.inode_size as u32;
+
+        // 计算 inode 表占用的块数
+        let inode_table_blocks = (inode_table_size + block_size - 1) / block_size;
+
+        // inode 表起始块号是第一个数据块开始的位置
+        // 以 first_data_block 为起始点，inode 表通常紧接在数据块之后
+        let inode_table_start_block = self.first_data_block + inode_table_blocks;
+
+        inode_table_start_block
+    }
 }
 
 impl Ext4Superblock {
-
+    pub fn get_magic(&self) -> u16 {
+        self.magic
+    }
 }
