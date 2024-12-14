@@ -1,4 +1,6 @@
 #![allow(unused)]
+use super::DiskInodeType;
+use crate::fs::vfs::VFSDirEnt;
 use crate::{copy_from_name1, copy_to_name1, lang_items::Bytes};
 use alloc::{
     format,
@@ -11,79 +13,99 @@ use core::{
     mem,
     ptr::{addr_of, addr_of_mut},
 };
-use super::DiskInodeType;
-use crate::fs::vfs::VFSDirEnt;
 
 pub const BAD_BLOCK: u32 = 0x0FFF_FFF7;
 pub const DIR_ENTRY_UNUSED: u8 = 0xe5;
 pub const DIR_ENTRY_LAST_AND_UNUSED: u8 = 0x0;
 pub const LAST_LONG_ENTRY: u8 = 0x40u8;
 #[derive(Debug, Clone, Copy)]
+// packed 代表紧凑排列，不会有对齐
+// 或者说对齐到1字节
 #[repr(packed)]
-/// *On-disk* data structure for partition information.
+/// Bios Paramater Block，即Bios参数块，
+/// 包含关于FAT32文件系统的基本信息
 pub struct BPB {
-    /// x86 assembly to jump instruction to boot code.
+    /// 跳转指令到引导代码的x86汇编
     pub bs_jmp_boot: [u8; 3],
-    /// “MSWIN4.1” There are many misconceptions about this field.
-    /// It is only a name string. Unlike some FAT drivers,
-    /// Microsoft operating systems don’t pay any attention to this field.
+    /// "MSWIN4.1" 关于这个字段有太多的误解
+    /// 就是一个字符串，与一些Fat的驱动程序不同，
+    /// 微软的操作系统（Windows）一般不鸟这个字段
     pub bs_oem_name: [u8; 8],
-    /// Bytes per sector, 512 for SD card
+    /// 每扇区字节数，对于SD卡来说通常为512字节
     pub byts_per_sec: u16,
-    /// sector per cluster, usually 8 for SD card
+    /// 每簇扇区数，对于SD卡来说通常为8
     pub sec_per_clus: u8,
-    /// sector number of the reserved area
+    /// 保留扇区数，即BootSector+Reserve的大小
     pub rsvd_sec_cnt: u16,
-    /// Number of FATs
+    /// fat表个数
     pub num_fats: u8,
     /// Have to be ZERO for FAT32.
     /// Positioned at offset
     pub root_ent_cnt: u16,
-    /// For FAT32 volumes, this field must be 0.
+    /// fat16扇区数，对于fat32文件系统，这个数必须为0
     pub tot_sec16: u16,
-    /// Used to denote the media type. This is a legacy field that is no longer in use.
-    /// 0xF8 is the standard value for “fixed” (non-removable) media.
-    /// For removable media, 0xF0 is frequently used.
-    /// The legal values for this field are:
+    /// 用于表示介质类型，这是一个不再使用的遗留字段
+    /// 0xF8 是固定介质（不可拆卸的）的标准值
+    /// 对于可拆卸介质，通常使用0xF0
+    /// 这个字段的合法值有：
     /// 0xF0, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, and 0xFF.
+    /// 介质描述符
     pub media: u8,
-    /// On FAT32 volumes this field must be 0, and fat_sz32 contains the FAT size count.
+    /// 在FAT32卷上，这个字段必须为0，fat_sz32包含FAT大小计数。
     pub fat_sz16: u16,
-    /// Sector per track used by interrupt 0x13, not needed by SD card.
+    /// 每磁道扇区数，对于SD卡来说不需要，被0x13中断使用
     pub sec_per_trk: u16,
     /// Number of heads for interrupt 0x13.
     /// This field is relevant as discussed earlier for BPB_SecPerTrk.
     /// This field contains the one based “count of heads”.
     /// For example, on a 1.44 MB 3.5-inch floppy drive this value is 2.
+    /// 磁头数
     pub num_heads: u16,
+    /// 隐藏扇区数
     pub hidd_sec: u32,
+    /// fat32分区的总扇区数
     pub tot_sec32: u32,
+    /// 每个fat32表占用的扇区数
     pub fat_sz32: u32,
+    /// 拓展标志
     pub ext_flags: u16,
+    /// 文件系统版本，通常为0
     pub fs_ver: u16,
     /// This is set to the cluster number of the first cluster of the root directory,
     /// usually 2 but not required to be 2.
     /// Unique to FAT32.
+    /// 根目录的起始簇号
     pub root_clus: u32,
     /// Sector number of FSINFO structure in the reserved area of the
     /// FAT32 volume. Usually 1.
     /// Unique to FAT32.
+    /// 文件系统信息扇区号，通常为1
     pub fs_info: u16,
     /// If non-zero, indicates the sector number in the reserved area
     /// of the volume of a copy of the boot record.
     /// Usually 6. No value other than 6 is recommended.
     /// Unique to FAT32.
+    /// 备份引导扇区号，通常为6
     pub bk_boot_sec: u16,
+    /// 保留字段
     pub reserved: [u8; 12],
 
+    /// 以下字段为扩展字段，只有在fat32文件系统中才有
+    /// BIOS驱动器号
     pub drv_num: u8,
+    /// 保留字段
     pub resvered1: u8,
+    /// 扩展引导标签
     pub boot_sig: u8,
+    /// 卷序列号，随机生成
     pub vol_id: u32,
+    /// 卷标，实际上有无都可以
     pub vol_lab: [u8; 11],
+    /// 文件系统类型
     pub fil_sys_type: [u8; 8],
 }
 
+/// Fat文件系统类型
 pub enum FatType {
     FAT32,
     FAT16,
@@ -101,6 +123,9 @@ impl BPB {
             && root_ent_cnt == 0
     }
     #[inline(always)]
+    /// 数据扇区数
+    /// # 计算式
+    /// 总扇区数 - (保留扇区数 + fat表数*每fat表扇区数 + 根目录扇区数)
     pub fn data_sector_count(&self) -> u32 {
         self.tot_sec32
             - (self.rsvd_sec_cnt as u32
@@ -108,6 +133,7 @@ impl BPB {
                 + self.root_dir_sec())
     }
     /// May be WRONG! This function should round DOWN.
+    /// 这个函数可能是错的，需要向下取整
     #[inline(always)]
     pub fn count_of_cluster(&self) -> u32 {
         self.data_sector_count() / (self.sec_per_clus as u32)
@@ -132,7 +158,7 @@ impl BPB {
         self.first_data_sector()
     }
     #[inline(always)]
-    /// The first data sector beyond the root directory
+    /// 根目录后的第一个数据扇区号
     pub fn first_data_sector(&self) -> u32 {
         let fat_sz: u32;
         if self.fat_sz16 != 0 {

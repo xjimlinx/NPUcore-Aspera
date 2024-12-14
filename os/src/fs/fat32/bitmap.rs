@@ -8,7 +8,9 @@ const FAT_ENTRY_FREE: u32 = 0;
 const FAT_ENTRY_RESERVED_TO_END: u32 = 0x0FFF_FFF8;
 pub const EOC: u32 = 0x0FFF_FFFF;
 /// *In-memory* data structure
-/// In FAT32, there are 2 FATs by default. We use ONLY the first one.
+/// 内存内的fat数据结构.
+/// 在Fat32文件系统中，有两个fat表，这里只使用第一张fat表
+/// 也就是说还没有实现fat的检错功能
 pub struct Fat {
     /// Cache manager for fat
     fat_cache_mgr: Arc<Mutex<BlockCacheManager>>,
@@ -26,12 +28,12 @@ pub struct Fat {
 }
 
 impl Fat {
-    /// Get the next cluster number pointed by current fat entry.
-    /// # Arguments
-    /// + `current_clus_num`: current cluster number
-    /// + `block_device`: pointer of block device
-    /// # Return value
-    /// Next cluster number
+    /// 获取当前fat表项指向的的下一个簇号
+    /// # 参数
+    /// + `current_clus_num`: 当前簇号
+    /// + `block_device`: 指向块设备的指针
+    /// # 返回值
+    /// 下一个簇的簇号
     pub fn get_next_clus_num(
         &self,
         current_clus_num: u32,
@@ -39,10 +41,7 @@ impl Fat {
     ) -> u32 {
         self.fat_cache_mgr
             .lock()
-            .get_block_cache(
-                self.this_fat_sec_num(current_clus_num),
-                block_device,
-            )
+            .get_block_cache(self.this_fat_sec_num(current_clus_num), block_device)
             .lock()
             .read(
                 self.this_fat_ent_offset(current_clus_num),
@@ -110,11 +109,11 @@ impl Fat {
         (self.start_block_id as u32 + (fat_offset / (self.byts_per_sec as u32))) as usize
     }
     #[inline(always)]
-    /// For a given cluster number, calculate its offset in the sector of the fat region
-    /// # Argument
-    /// + `clus_num`: cluster number
-    /// # Return value
-    /// offset
+    /// 对于给定的簇号，计算它在fat分区的扇区中的偏移量
+    /// # 参数
+    /// + `clus_num`: 簇号
+    /// # 返回值
+    /// 偏移量
     pub fn this_fat_ent_offset(&self, clus_num: u32) -> usize {
         let fat_offset = clus_num * 4;
         (fat_offset % (self.byts_per_sec as u32)) as usize

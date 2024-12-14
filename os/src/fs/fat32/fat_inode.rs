@@ -8,16 +8,16 @@ use crate::fs::inode::InodeTime;
 use crate::fs::inode::InodeTrait;
 use crate::fs::inode::{InodeLock, InodeMiddle};
 use crate::fs::vfs::VFSFileContent;
+use crate::fs::vfs::VFS;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use downcast_rs::{Downcast, DowncastSync};
 use core::any::Any;
 use core::convert::TryInto;
 use core::ops::Mul;
 use core::panic;
+use downcast_rs::{Downcast, DowncastSync};
 use spin::*;
-
 
 pub struct FileContent {
     /// For FAT32, size is a value computed from FAT.
@@ -219,14 +219,17 @@ impl Inode {
     /// + `efs`: The pointer to inner file system
     /// # Return Value
     /// A pointer to Inode
-    pub fn root_inode(efs: &Arc<EasyFileSystem>) -> Arc<Self> {
-        let rt_clus = efs.root_clus;
+    // pub fn root_inode(efs: &Arc<EasyFileSystem>) -> Arc<Self> {
+    pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
+        // let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        let efs_concrete = Arc::downcast::<EasyFileSystem>(efs.clone()).unwrap();
+        let rt_clus = efs_concrete.root_clus;
         Self::new(
             rt_clus,
             DiskInodeType::Directory,
             None,
             None,
-            Arc::clone(efs),
+            Arc::clone(&efs_concrete),
         )
     }
 }
@@ -1376,8 +1379,13 @@ impl InodeTrait for Inode {
         vec
     }
 
-    fn from_ent(&self, parent_dir: &Arc<dyn InodeTrait>, ent: &FATShortDirEnt, offset: u32) -> Arc<dyn InodeTrait>
-    // where
+    fn from_ent(
+        &self,
+        parent_dir: &Arc<dyn InodeTrait>,
+        ent: &FATShortDirEnt,
+        offset: u32,
+    ) -> Arc<dyn InodeTrait>
+// where
     //     Self: Sized,
     {
         // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().unwrap();
@@ -1518,7 +1526,8 @@ impl InodeTrait for Inode {
                 };
             // Generate current file
             // let current_file = Self::from_fat_ent(&parent_dir, &short_ent, short_ent_offset);
-            let current_file = Self::from_fat_ent(&parent_dir_specific, &short_ent, short_ent_offset);
+            let current_file =
+                Self::from_fat_ent(&parent_dir_specific, &short_ent, short_ent_offset);
             // If file_type is Directory, set first 3 directory entry
             if file_type == DiskInodeType::Directory {
                 // Set hint
@@ -1602,5 +1611,9 @@ impl InodeTrait for Inode {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
+        Inode::root_inode(efs)
     }
 }
