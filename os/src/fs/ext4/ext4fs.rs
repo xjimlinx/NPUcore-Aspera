@@ -3,9 +3,9 @@ use core::arch::asm;
 use core::ptr::addr_of;
 
 use super::{superblock::Ext4Superblock, BlockCacheManager, BlockDevice, Cache};
-use crate::arch;
 use crate::fs::cache::BufferCache;
 use crate::fs::vfs::VFS;
+use crate::{arch, fs::filesystem::FS_Type};
 use alloc::{sync::Arc, vec::Vec};
 type SuperBlock = Ext4Superblock;
 
@@ -52,10 +52,6 @@ impl Ext4FileSystem {
                     /// 缓存管理器
                     cache_mgr: ext4_cache_mgr,
                 };
-                println!(
-                    "[ext4fs] FS magic number is {}",
-                    ext4fs.superblock.get_magic()
-                );
                 ext4fs.superblock.dump_info();
                 Arc::new(ext4fs)
             })
@@ -78,5 +74,8 @@ impl VFS for Ext4FileSystem {
         Self: Sized,
     {
         self.open(block_device, index_cache_mgr)
+    }
+    fn get_filesystem_type(&self) -> FS_Type {
+        FS_Type::Ext4
     }
 }
