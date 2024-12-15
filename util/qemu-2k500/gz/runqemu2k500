@@ -11,7 +11,7 @@ truncate -s 16M $BIOS
 # 配置QEMU路径
 QEMU="$SCRIPTPATH"/../tmp/qemu/bin/qemu-system-loongarch64
 # 配置TFTP目录
-TFTP_DIR="$SCRIPTPATH"/../../../easy-fs-fuse
+TFTP_DIR="$SCRIPTPATH"/../../../fs-img-dir
 # 配置OS文件路径
 OS="$SCRIPTPATH"/nand.dat
 # 检查OS文件是否存在，如果不存在则创建一个大小为256M的文件，

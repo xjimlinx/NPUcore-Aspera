@@ -38,7 +38,7 @@ ifndef LOG
 endif
 
 # Filesystem
-IMG_DIR := ../easy-fs-fuse
+IMG_DIR := ../fs-img-dir
 FS_MODE ?= fat32
 
 FAT32_IMG_LA = rootfs-ubifs-ze.img
@@ -55,7 +55,7 @@ EXT4_2K500_LN = $(shell readlink -f $(U_EXT4_DIR))/$(EXT4_IMG_LA)
 
 QEMU_2K500_DIR=../util/qemu-2k500/gz
 QEMU_2K500=$(QEMU_2K500_DIR)/runqemu2k500
-IMG_DIR=../easy-fs-fuse
+IMG_DIR=../fs-img-dir
 U_IMG=$(IMG_DIR)/uImage
 
 LA_DEBUGGER_SERIAL_PORT = $$(python3 -m serial.tools.list_ports 1A86:7523 -q | head -n 1)
@@ -137,7 +137,7 @@ remake-qemu-flash-img: fs-img .WAIT qemu-flash-$(FS_MODE)-img
 
 qemu-flash-fat32-img:
 ifeq ($(BOARD), 2k500)
-	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
+	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
 else ifeq ($(BOARD), laqemu)
 	@./la_fat $(QEMU_2K500)
 	@echo QEMU_2K500
@@ -145,7 +145,7 @@ endif
 
 qemu-flash-ext4-img:
 ifeq ($(BOARD), 2k500)
-	@./la_ext4 $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ) 
+	@./la_ext4 $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
 else ifeq ($(BOARD), laqemu)
 	@./la_ext4 $(QEMU_2K500)
 	@echo QEMU_2K500
@@ -170,7 +170,7 @@ endif
 
 clean:
 	@cargo clean
-	@sudo rm -rf ../easy-fs-fuse
+	@sudo rm -rf ../fs-img-dir
 	@sudo rm -f src/linker.ld
 	-@cd ../user && make clean
 

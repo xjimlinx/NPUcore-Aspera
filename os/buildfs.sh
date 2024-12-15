@@ -1,5 +1,5 @@
 SUDO=$(if [ $(whoami) = "root" ];then echo -n "";else echo -n "sudo";fi)
-U_DIR="../easy-fs-fuse"
+U_DIR="../fs-img-dir"
 U=$1
 BLK_SZ="512"
 TARGET=riscv64gc-unknown-none-elf
@@ -39,7 +39,7 @@ fi
 if [ "$4" = "ext4" ]
 then
     echo Making ext4 imgage with BLK_SZ=${BLK_SZ}
-    mkfs.ext4 ${U}
+    mkfs.ext4 ${U} -b ${BLK_SZ} 
     fdisk -l ${U}
 fi
 
