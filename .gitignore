@@ -7,6 +7,9 @@ os/src/linker.ld
 .vscode/
 .VSCodeCounter/
 
+# RustRover config
+.idea/
+
 # etc
 os/2024testcase/
 
