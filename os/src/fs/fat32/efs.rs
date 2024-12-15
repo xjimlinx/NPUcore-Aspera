@@ -149,4 +149,7 @@ impl VFS for EasyFileSystem {
     {
         self.open(block_device, index_cache_mgr)
     }
+    fn get_filesystem_type(&self) -> crate::fs::FS_Type {
+        crate::fs::FS_Type::Fat32
+    }
 }

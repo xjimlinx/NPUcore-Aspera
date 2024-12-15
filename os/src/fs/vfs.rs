@@ -6,6 +6,7 @@ use downcast_rs::{impl_downcast, DowncastSync};
 
 // 根目录项
 use super::directory_tree::ROOT;
+use super::filesystem::FS_Type;
 
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
@@ -47,6 +48,8 @@ pub trait VFS: DowncastSync {
     }
 
     fn alloc_blocks(&self, blocks: usize) -> Vec<usize>;
+
+    fn get_filesystem_type(&self) -> FS_Type;
 }
 impl_downcast!(sync VFS);
 
