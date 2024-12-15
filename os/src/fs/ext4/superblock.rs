@@ -1,3 +1,4 @@
+use crate::fs::timestamp::format_time;
 #[allow(unused)]
 use alloc::sync::Arc;
 use alloc::{format, string::String};
@@ -233,23 +234,6 @@ impl Ext4Superblock {
 
 impl Ext4Superblock {
     pub fn dump_info(&self) {
-        fn format_time(timestamp: u32) -> String {
-            let seconds_in_day = 86400;
-            let days_since_epoch = timestamp / seconds_in_day;
-            let remaining_seconds = timestamp % seconds_in_day;
-
-            let year = 1970 + days_since_epoch / 365;
-            let day_of_year = days_since_epoch % 365;
-
-            let hours = remaining_seconds / 3600;
-            let minutes = (remaining_seconds % 3600) / 60;
-            let seconds = remaining_seconds % 60;
-
-            format!(
-                "{}-{} {}:{:02}:{:02}",
-                year, day_of_year, hours, minutes, seconds
-            )
-        }
         println!("[fs: ext4] Inodes count: {}", self.inodes_count);
         println!("[fs: ext4] Blocks count (low): {}", self.blocks_count_lo);
         println!(

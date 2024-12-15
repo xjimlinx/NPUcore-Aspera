@@ -13,6 +13,7 @@ pub mod swap;
 mod dirent;
 mod file_descriptor;
 mod inode;
+mod timestamp;
 mod vfs;
 
 pub use self::dev::{hwclock::*, pipe::*, socket::*};
