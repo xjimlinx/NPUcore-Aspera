@@ -9,8 +9,6 @@ use core::{any, panic};
 use crate::fs::fat32::fat_inode::Inode;
 use crate::fs::fat32::layout::FATDiskInodeType;
 use crate::fs::vfs::VFS;
-#[allow(unused)]
-use crate::fs::CURR_FS_TYPE;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -211,14 +209,12 @@ pub struct OSInode {
     special_use: bool,
     append: bool,
     inner: Arc<dyn InodeTrait>,
-    // inner: Arc<InodeImpl>,
     offset: Mutex<usize>,
     dirnode_ptr: Arc<Mutex<Weak<DirectoryTreeNode>>>,
 }
 
 impl OSInode {
     pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
-        // pub fn new(root_inode: Arc<InodeImpl>) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
             writable: true,
