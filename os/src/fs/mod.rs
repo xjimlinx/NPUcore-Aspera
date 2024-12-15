@@ -25,11 +25,9 @@ pub use self::layout::*;
 pub use crate::drivers::block::BlockDevice;
 // TODO: ext4 support
 use self::cache::PageCache;
+use crate::fs::filesystem::pre_mount;
 use alloc::{string::String, sync::Arc};
 use lazy_static::*;
-
-// 当前的文件系统类型
-pub const CURR_FS_TYPE: FS_Type = FS_Type::Fat32;
 
 lazy_static! {
     // 根目录的 FileDescriptor
