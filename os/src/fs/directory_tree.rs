@@ -1,8 +1,5 @@
-use super::ext4::ext4fs::Ext4FileSystem;
 use super::inode::DiskInodeType;
-use super::CURR_FS_TYPE;
-use super::{fat32::EasyFileSystem, vfs::VFS};
-// use super::ext4::{}; TODO:
+use super::vfs::VFS;
 use super::{
     cache::BlockCacheManager,
     dev::{null::Null, tty::Teletype, zero::Zero},
@@ -31,18 +28,17 @@ use lazy_static::*;
 use spin::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 
 lazy_static! {
-    // pub static ref FILE_SYSTEM: Arc<dyn VFS> = EasyFileSystem::open(
-    pub static ref FILE_SYSTEM: Arc<dyn VFS> = Ext4FileSystem::open(
-        BLOCK_DEVICE.clone(),
-        Arc::new(Mutex::new(BlockCacheManager::new()))
-    );
+    // 文件系统实例
+    pub static ref FILE_SYSTEM: Arc<dyn VFS> =
+        FS_Type::mount_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
     // 目录树根节点
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
+        let curr_fs_type = FILE_SYSTEM.get_filesystem_type();
         let inode = DirectoryTreeNode::new(
             // 因为是根节点，所以没有名字（根目录是不是只有‘/’，斜杠左边是不是啥也没有？）
             "".to_string(),
-            // TODO: 后面要添加 ext4 文件系统
-            Arc::new(FileSystem::new(CURR_FS_TYPE)),
+            // 通过获取FILE_SYSTEM的类型来创建目录树的文件系统字段
+            Arc::new(FileSystem::new(curr_fs_type)),
             // 系统Inode，包装了具体文件系统的Inode
             OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             // 父节点，因为是根节点所以没有父节点
