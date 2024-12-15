@@ -1,5 +1,6 @@
 #[allow(unused)]
 use alloc::sync::Arc;
+use alloc::{format, string::String};
 
 use super::*;
 #[repr(C)]
@@ -231,6 +232,114 @@ impl Ext4Superblock {
 }
 
 impl Ext4Superblock {
+    pub fn dump_info(&self) {
+        fn format_time(timestamp: u32) -> String {
+            let seconds_in_day = 86400;
+            let days_since_epoch = timestamp / seconds_in_day;
+            let remaining_seconds = timestamp % seconds_in_day;
+
+            let year = 1970 + days_since_epoch / 365;
+            let day_of_year = days_since_epoch % 365;
+
+            let hours = remaining_seconds / 3600;
+            let minutes = (remaining_seconds % 3600) / 60;
+            let seconds = remaining_seconds % 60;
+
+            format!(
+                "{}-{} {}:{:02}:{:02}",
+                year, day_of_year, hours, minutes, seconds
+            )
+        }
+        println!("[fs: ext4] Inodes count: {}", self.inodes_count);
+        println!("[fs: ext4] Blocks count (low): {}", self.blocks_count_lo);
+        println!(
+            "[fs: ext4] Reserved blocks count (low): {}",
+            self.reserved_blocks_count_lo
+        );
+        println!(
+            "[fs: ext4] Free blocks count (low): {}",
+            self.free_blocks_count_lo
+        );
+        println!("[fs: ext4] Free inodes count: {}", self.free_inodes_count);
+        println!("[fs: ext4] First data block: {}", self.first_data_block);
+        println!("[fs: ext4] Block size: {}", 1024 << self.log_block_size);
+        println!("[fs: ext4] Inodes per group: {}", self.inodes_per_group);
+        println!("[fs: ext4] Mount time: {}", format_time(self.mount_time));
+        println!("[fs: ext4] Write time: {}", format_time(self.write_time));
+        println!("[fs: ext4] Mount count: {}", self.mount_count);
+        println!("[fs: ext4] Max mount count: {}", self.max_mount_count);
+        println!("[fs: ext4] Magic: 0x{:04X}", self.magic);
+        println!("[fs: ext4] State: {}", self.state);
+        println!("[fs: ext4] Errors: {}", self.errors);
+        println!(
+            "[fs: ext4] Last check time: {}",
+            format_time(self.last_check_time)
+        );
+        println!("[fs: ext4] Check interval: {} seconds", self.check_interval);
+        println!("[fs: ext4] Creator OS: {}", self.creator_os);
+        println!("[fs: ext4] Revision level: {}", self.rev_level);
+        println!("[fs: ext4] First inode: {}", self.first_inode);
+        println!("[fs: ext4] Inode size: {}", self.inode_size);
+        println!(
+            "[fs: ext4] Features compatible: 0x{:08X}",
+            self.features_compatible
+        );
+        println!(
+            "[fs: ext4] Features incompatible: 0x{:08X}",
+            self.features_incompatible
+        );
+        println!(
+            "[fs: ext4] Read-only compatible features: 0x{:08X}",
+            self.features_read_only
+        );
+        println!("[fs: ext4] UUID: {:X?}", self.uuid);
+        println!(
+            "[fs: ext4] Volume name: {}",
+            String::from_utf8_lossy(&self.volume_name)
+        );
+        println!(
+            "[fs: ext4] Last mounted directory: {}",
+            String::from_utf8_lossy(&self.last_mounted)
+        );
+        println!("[fs: ext4] Blocks count (high): {}", self.blocks_count_hi);
+        println!(
+            "[fs: ext4] Reserved blocks count (high): {}",
+            self.reserved_blocks_count_hi
+        );
+        println!(
+            "[fs: ext4] Free blocks count (high): {}",
+            self.free_blocks_count_hi
+        );
+        println!("[fs: ext4] Min extra inode size: {}", self.min_extra_isize);
+        println!(
+            "[fs: ext4] Want extra inode size: {}",
+            self.want_extra_isize
+        );
+        println!("[fs: ext4] Flags: 0x{:08X}", self.flags);
+        println!("[fs: ext4] RAID stride: {}", self.raid_stride);
+        println!("[fs: ext4] RAID stripe width: {}", self.raid_stripe_width);
+        println!(
+            "[fs: ext4] Log groups per flex: {}",
+            self.log_groups_per_flex
+        );
+        println!("[fs: ext4] Kbytes written: {}", self.kbytes_written);
+        println!("[fs: ext4] Error count: {}", self.error_count);
+        println!(
+            "[fs: ext4] First error time: {}",
+            format_time(self.first_error_time)
+        );
+        println!("[fs: ext4] First error inode: {}", self.first_error_ino);
+        println!("[fs: ext4] First error block: {}", self.first_error_block);
+        println!(
+            "[fs: ext4] Last error time: {}",
+            format_time(self.last_error_time)
+        );
+        println!("[fs: ext4] Last error inode: {}", self.last_error_ino);
+        println!("[fs: ext4] Last error block: {}", self.last_error_block);
+        println!("[fs: ext4] Lost+found inode: {}", self.lpf_ino);
+        println!("[fs: ext4] Encryption salt: {:X?}", self.encrypt_pw_salt);
+        println!("[fs: ext4] Checksum: 0x{:08X}", self.checksum);
+    }
     pub fn get_magic(&self) -> u16 {
         self.magic
     }

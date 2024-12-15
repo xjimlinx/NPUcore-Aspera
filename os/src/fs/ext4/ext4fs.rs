@@ -56,6 +56,7 @@ impl Ext4FileSystem {
                     "[ext4fs] FS magic number is {}",
                     ext4fs.superblock.get_magic()
                 );
+                ext4fs.superblock.dump_info();
                 Arc::new(ext4fs)
             })
     }
