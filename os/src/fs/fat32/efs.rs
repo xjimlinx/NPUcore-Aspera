@@ -3,9 +3,10 @@ use core::arch::asm;
 use core::ptr::addr_of;
 
 use crate::arch;
+use crate::fs::inode::FatInode;
 
 use super::{layout::BPB, Cache};
-use super::{BlockCacheManager, BlockDevice, Fat};
+use super::{BlockCacheManager, BlockDevice, DiskInodeType, Fat, Inode};
 use crate::fs::vfs::VFS;
 use alloc::{sync::Arc, vec::Vec};
 
@@ -152,4 +153,7 @@ impl VFS for EasyFileSystem {
     fn get_filesystem_type(&self) -> crate::fs::FS_Type {
         crate::fs::FS_Type::Fat32
     }
+    // fn root_inode(&self) -> Arc<dyn crate::fs::inode::InodeTrait> {
+    //     Inode::root_inode(Arc::new(self.clone()))
+    // }
 }

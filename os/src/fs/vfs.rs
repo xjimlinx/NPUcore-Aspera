@@ -6,7 +6,9 @@ use downcast_rs::{impl_downcast, DowncastSync};
 
 // 根目录项
 use super::directory_tree::ROOT;
+use super::ext4::{Ext4Inode, Inode};
 use super::filesystem::FS_Type;
+use super::inode::InodeTrait;
 
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
@@ -50,8 +52,20 @@ pub trait VFS: DowncastSync {
     fn alloc_blocks(&self, blocks: usize) -> Vec<usize>;
 
     fn get_filesystem_type(&self) -> FS_Type;
+
+    // fn root_inode(&self) -> Arc<dyn InodeTrait>;
 }
 impl_downcast!(sync VFS);
+
+impl VFS {
+    pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<dyn InodeTrait> {
+        match efs.get_filesystem_type() {
+            FS_Type::Ext4 => Ext4Inode::root_inode(efs),
+            FS_Type::Fat32 => Inode::root_inode(efs),
+            FS_Type::Null => panic!("Null filesystem type does not have a root inode"),
+        }
+    }
+}
 
 // 对不同类型文件系统文件的封装
 pub trait VFSFileContent {}

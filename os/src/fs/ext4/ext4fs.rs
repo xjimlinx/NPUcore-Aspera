@@ -4,6 +4,7 @@ use core::ptr::addr_of;
 
 use super::{superblock::Ext4Superblock, BlockCacheManager, BlockDevice, Cache};
 use crate::fs::cache::BufferCache;
+use crate::fs::inode::InodeTrait;
 use crate::fs::vfs::VFS;
 use crate::{arch, fs::filesystem::FS_Type};
 use alloc::{sync::Arc, vec::Vec};
@@ -59,6 +60,9 @@ impl Ext4FileSystem {
     pub fn alloc_blocks(&self, blocks: usize) -> Vec<usize> {
         todo!()
     }
+    fn root_inode(&self) -> Arc<dyn InodeTrait> {
+        todo!();
+    }
 }
 
 impl VFS for Ext4FileSystem {
@@ -78,4 +82,7 @@ impl VFS for Ext4FileSystem {
     fn get_filesystem_type(&self) -> FS_Type {
         FS_Type::Ext4
     }
+    // fn root_inode(&self) -> Arc<dyn InodeTrait> {
+    //     todo!();
+    // }
 }
