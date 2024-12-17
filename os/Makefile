@@ -1,4 +1,3 @@
-# Building
 TARGET := loongarch64-unknown-linux-gnu
 MODE ?= release
 CORE_NUM := 1
@@ -70,7 +69,7 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show | grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-all: user remake-qemu-flash-img run
+all: clean user remake-qemu-flash-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
@@ -81,7 +80,7 @@ endif
 #	-rustup component add rust-src
 #	-rustup component add llvm-tools-preview
 
-# build all user programs
+# 构建用户态程序
 user: c-user rust-user
 c-user:
 	@cd ../user && make c-user BOARD=$(BOARD) MODE=$(MODE)
@@ -110,7 +109,6 @@ ifeq ($(ARCH), loongarch64)
 	@cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
 endif
 	-@rm src/linker.ld
-#	@$(OBJDUMP) -SC $(KERNEL_ELF) > $(KERNEL_ELF).S
 
 fs-img:
 ifeq ($(BOARD), 2k500)
@@ -154,9 +152,6 @@ endif
 src-linker.ld: .FORCE
 	-@rm src/linker.ld
 	@cpp -P $(LA_2K500_DISABLE_EH_FRAME) -D $(LDBOARD) src/linker.in.ld -o src/linker.ld
-
-fsimg-format:
-	sudo mkfs.vfat -F 32 ${U_FAT32}
 
 update-usr:user fs_img
 
