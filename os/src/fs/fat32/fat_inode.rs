@@ -4,9 +4,9 @@ use crate::fs::fat32::dir_iter::*;
 use crate::fs::fat32::layout::{FATDirEnt, FATDiskInodeType, FATLongDirEnt, FATShortDirEnt};
 use crate::fs::fat32::EasyFileSystem;
 use crate::fs::fat32::{BlockCacheManager, Cache, PageCache, PageCacheManager};
+use crate::fs::inode::InodeLock;
 use crate::fs::inode::InodeTime;
 use crate::fs::inode::InodeTrait;
-use crate::fs::inode::{InodeLock, InodeMiddle};
 use crate::fs::vfs::VFSFileContent;
 use crate::fs::vfs::VFS;
 use alloc::string::String;
@@ -70,8 +70,6 @@ pub struct Inode {
     /// Info Inode to delete file content
     deleted: Mutex<bool>,
 }
-
-impl InodeMiddle for Inode {}
 
 impl Drop for Inode {
     /// Before deleting the inode, the file information should be written back to the parent directory
@@ -162,8 +160,6 @@ impl Inode {
     }
 }
 
-impl Inode {}
-
 /// Basic Funtions
 impl Inode {
     /// Get first cluster of inode.
@@ -214,14 +210,12 @@ impl Inode {
         }
         block_ids
     }
-    /// Open the root directory
-    /// # Arguments
-    /// + `efs`: The pointer to inner file system
-    /// # Return Value
+    /// 打开根目录
+    /// # 参数
+    /// + `efs`: 指向文件系统实例的指针
+    /// # 返回值
     /// A pointer to Inode
-    // pub fn root_inode(efs: &Arc<EasyFileSystem>) -> Arc<Self> {
     pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
-        // let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
         let efs_concrete = Arc::downcast::<EasyFileSystem>(efs.clone()).unwrap();
         let rt_clus = efs_concrete.root_clus;
         Self::new(
@@ -1384,31 +1378,10 @@ impl InodeTrait for Inode {
         parent_dir: &Arc<dyn InodeTrait>,
         ent: &FATShortDirEnt,
         offset: u32,
-    ) -> Arc<dyn InodeTrait>
-// where
-    //     Self: Sized,
-    {
-        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().unwrap();
-        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Inode>>().expect("wtf");
-        // let inode = Self::from_fat_ent(parent_dir, ent, offset);
+    ) -> Arc<dyn InodeTrait> {
         let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
         // let shit = parent_dir.clone();
         let inode = Self::from_fat_ent(&parent_dir_specific, ent, offset);
-        // Self::new(
-        //     ent.get_first_clus(),
-        //     if ent.is_dir() {
-        //         DiskInodeType::Directory
-        //     } else {
-        //         DiskInodeType::File
-        //     },
-        //     if ent.is_file() {
-        //         Some(ent.file_size)
-        //     } else {
-        //         None
-        //     },
-        //     Some((parent_dir.clone(), offset)),
-        //     parent_dir.fs.clone(),
-        // )
         inode
     }
 
