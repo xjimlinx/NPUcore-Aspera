@@ -40,7 +40,8 @@ lazy_static! {
             // 通过获取FILE_SYSTEM的类型来创建目录树的文件系统字段
             Arc::new(FileSystem::new(curr_fs_type)),
             // 系统Inode，包装了具体文件系统的Inode
-            OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
+            // OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
+            OSInode::new(VFS::root_inode(&FILE_SYSTEM)),
             // 父节点，因为是根节点所以没有父节点
             Weak::new(),
         );

@@ -1,6 +1,13 @@
-use crate::fs::inode::InodeTrait;
+use alloc::sync::Arc;
 
-use super::{EXT4_INODE_MODE_PERM_MASK, EXT4_INODE_MODE_TYPE_MASK};
+use crate::fs::{inode::InodeTrait, vfs::VFS};
+
+use super::{
+    crc::{ext4_crc32c, EXT4_CRC32_INIT},
+    extent::{Ext4Extent, Ext4ExtentHeader, Ext4ExtentIndex},
+    superblock::Ext4Superblock,
+    BlockDevice, EXT4_INODE_MODE_PERM_MASK, EXT4_INODE_MODE_TYPE_MASK,
+};
 
 bitflags! {
     pub struct InodeFileType: u16 {
@@ -68,6 +75,10 @@ pub struct Linux2 {
 }
 
 impl Ext4Inode {
+    pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
+        todo!()
+    }
+
     pub fn mode(&self) -> u16 {
         self.mode
     }
@@ -325,6 +336,151 @@ impl Ext4Inode {
     }
 }
 
+#[derive(Clone)]
+pub struct Ext4InodeRef {
+    pub inode_num: u32,
+    pub inode: Ext4Inode,
+}
+
+impl Ext4Inode {
+    /// Get the depth of the extent tree from an inode.
+    pub fn root_header_depth(&self) -> u16 {
+        self.root_extent_header().depth
+    }
+
+    pub fn root_extent_header_ref(&self) -> &Ext4ExtentHeader {
+        let header_ptr = self.block.as_ptr() as *const Ext4ExtentHeader;
+        unsafe { &*header_ptr }
+    }
+
+    pub fn root_extent_header(&self) -> Ext4ExtentHeader {
+        let header_ptr = self.block.as_ptr() as *const Ext4ExtentHeader;
+        unsafe { *header_ptr }
+    }
+
+    pub fn root_extent_header_mut(&mut self) -> &mut Ext4ExtentHeader {
+        let header_ptr = self.block.as_mut_ptr() as *mut Ext4ExtentHeader;
+        unsafe { &mut *header_ptr }
+    }
+
+    pub fn root_extent_mut_at(&mut self, pos: usize) -> &mut Ext4Extent {
+        let header_ptr = self.block.as_mut_ptr() as *mut Ext4ExtentHeader;
+        unsafe { &mut *(header_ptr.add(1) as *mut Ext4Extent).add(pos) }
+    }
+
+    pub fn root_extent_ref_at(&mut self, pos: usize) -> &Ext4Extent {
+        let header_ptr = self.block.as_ptr() as *const Ext4ExtentHeader;
+        unsafe { &*(header_ptr.add(1) as *const Ext4Extent).add(pos) }
+    }
+
+    pub fn root_extent_at(&mut self, pos: usize) -> Ext4Extent {
+        let header_ptr = self.block.as_ptr() as *const Ext4ExtentHeader;
+        unsafe { *(header_ptr.add(1) as *const Ext4Extent).add(pos) }
+    }
+
+    pub fn root_first_index_mut(&mut self) -> &mut Ext4ExtentIndex {
+        let header_ptr = self.block.as_mut_ptr() as *mut Ext4ExtentHeader;
+        unsafe { &mut *(header_ptr.add(1) as *mut Ext4ExtentIndex) }
+    }
+
+    pub fn extent_tree_init(&mut self) {
+        let header_ptr = self.block.as_mut_ptr() as *mut Ext4ExtentHeader;
+        unsafe {
+            (*header_ptr).set_magic();
+            (*header_ptr).set_entries_count(0);
+            (*header_ptr).set_max_entries_count(4); // 假设最大条目数为 4
+            (*header_ptr).set_depth(0);
+            (*header_ptr).set_generation(0);
+        }
+    }
+
+    fn get_checksum(&self, super_block: &Ext4Superblock) -> u32 {
+        let inode_size = super_block.inode_size;
+        let mut v: u32 = self.osd2.l_i_checksum_lo as u32;
+        if inode_size > 128 {
+            v |= (self.i_checksum_hi as u32) << 16;
+        }
+        v
+    }
+    #[allow(unused)]
+    pub fn set_inode_checksum_value(
+        &mut self,
+        super_block: &Ext4Superblock,
+        inode_id: u32,
+        checksum: u32,
+    ) {
+        let inode_size = super_block.inode_size();
+
+        self.osd2.l_i_checksum_lo = (checksum & 0xffff) as u16;
+        if inode_size > 128 {
+            self.i_checksum_hi = (checksum >> 16) as u16;
+        }
+    }
+    fn copy_to_slice(&self, slice: &mut [u8]) {
+        unsafe {
+            let inode_ptr = self as *const Ext4Inode as *const u8;
+            let array_ptr = slice.as_ptr() as *mut u8;
+            core::ptr::copy_nonoverlapping(inode_ptr, array_ptr, 0x9c);
+        }
+    }
+    #[allow(unused)]
+    pub fn get_inode_checksum(&mut self, inode_id: u32, super_block: &Ext4Superblock) -> u32 {
+        let inode_size = super_block.inode_size();
+
+        let orig_checksum = self.get_checksum(super_block);
+        let mut checksum = 0;
+
+        let ino_index = inode_id as u32;
+        let ino_gen = self.generation;
+
+        // Preparation: temporarily set bg checksum to 0
+        self.osd2.l_i_checksum_lo = 0;
+        self.i_checksum_hi = 0;
+
+        checksum = ext4_crc32c(
+            EXT4_CRC32_INIT,
+            &super_block.uuid,
+            super_block.uuid.len() as u32,
+        );
+        checksum = ext4_crc32c(checksum, &ino_index.to_le_bytes(), 4);
+        checksum = ext4_crc32c(checksum, &ino_gen.to_le_bytes(), 4);
+
+        let mut raw_data = [0u8; 0x100];
+        self.copy_to_slice(&mut raw_data);
+
+        // inode checksum
+        checksum = ext4_crc32c(checksum, &raw_data, inode_size as u32);
+
+        self.set_inode_checksum_value(super_block, inode_id, checksum);
+
+        if inode_size == 128 {
+            checksum &= 0xFFFF;
+        }
+
+        checksum
+    }
+
+    pub fn set_inode_checksum(&mut self, super_block: &Ext4Superblock, inode_id: u32) {
+        let inode_size = super_block.inode_size();
+        let checksum = self.get_inode_checksum(inode_id, super_block);
+
+        self.osd2.l_i_checksum_lo = ((checksum << 16) >> 16) as u16;
+        if inode_size > 128 {
+            self.i_checksum_hi = (checksum >> 16) as u16;
+        }
+    }
+
+    pub fn sync_inode_to_disk(&self, block_device: Arc<dyn BlockDevice>, inode_pos: usize) {
+        let data = unsafe {
+            core::slice::from_raw_parts(
+                self as *const _ as *const u8,
+                core::intrinsics::size_of::<Ext4Inode>(),
+            )
+        };
+        block_device.write_block(inode_pos, data);
+    }
+}
+
 #[allow(unused)]
 impl InodeTrait for Ext4Inode {
     fn read(&self) -> spin::RwLockReadGuard<crate::fs::inode::InodeLock> {
@@ -577,9 +733,7 @@ impl InodeTrait for Ext4Inode {
         self
     }
 
-    fn root_inode(efs: &alloc::sync::Arc<dyn crate::fs::vfs::VFS>) -> alloc::sync::Arc<Self>
-    where
-        Self: Sized {
-        todo!()
+    fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
+        Ext4Inode::root_inode(efs)
     }
 }
