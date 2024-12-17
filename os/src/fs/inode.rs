@@ -23,17 +23,8 @@ use vfs::VFSDirEnt;
 
 pub struct InodeLock;
 
-pub trait InodeMiddle {}
-
 pub type InodeImpl = Inode;
-
-/// 针对具体文件系统的Inode类型
-pub enum InodeEnum {
-    Fat32(Arc<InodeImpl>),
-    Ext4(Arc<Ext4Inode>),
-}
-
-impl InodeEnum {}
+pub type FatInode = Inode;
 
 #[allow(unused)]
 pub trait InodeTrait: DowncastSync {
@@ -115,8 +106,6 @@ pub trait InodeTrait: DowncastSync {
         parent_inode_lock: &RwLockWriteGuard<InodeLock>,
         name: String,
     ) -> Result<(), ()>;
-    // where
-    // Self: Sized;
     fn create_lock(
         &self,
         parent_dir: &Arc<dyn InodeTrait>,
