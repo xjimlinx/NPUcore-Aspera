@@ -75,7 +75,6 @@ pub fn rust_main() -> ! {
 
     machine_init();
     println!("[kernel] Hello, world!");
-    println!("[test] Point1");
 
     //machine independent initialization
     fs::directory_tree::init_fs();
