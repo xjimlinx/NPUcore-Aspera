@@ -26,23 +26,6 @@ pub struct EasyFileSystem {
     pub byts_per_sec: u16,
 }
 
-// 以下三个函数实际上都没有用到，都直接使用fat内部的函数了
-// export implementation of methods from FAT.
-// impl EasyFileSystem {
-//     #[inline(always)]
-//     pub fn this_fat_ent_offset(&self, n: u32) -> u32 {
-//         self.fat.this_fat_ent_offset(n) as u32
-//     }
-//     #[inline(always)]
-//     pub fn this_fat_sec_num(&self, n: u32) -> u32 {
-//         self.fat.this_fat_sec_num(n) as u32
-//     }
-//     #[inline(always)]
-//     pub fn get_next_clus_num(&self, result: u32) -> u32 {
-//         self.fat.get_next_clus_num(result, &self.block_device)
-//     }
-// }
-
 impl EasyFileSystem {
     pub fn first_data_sector(&self) -> u32 {
         self.data_area_start_block
@@ -148,12 +131,9 @@ impl VFS for EasyFileSystem {
     where
         Self: Sized,
     {
-        self.open(block_device, index_cache_mgr)
+        EasyFileSystem::open(block_device, index_cache_mgr)
     }
     fn get_filesystem_type(&self) -> crate::fs::FS_Type {
         crate::fs::FS_Type::Fat32
     }
-    // fn root_inode(&self) -> Arc<dyn crate::fs::inode::InodeTrait> {
-    //     Inode::root_inode(Arc::new(self.clone()))
-    // }
 }

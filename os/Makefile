@@ -69,7 +69,7 @@ LA_LOAD_ADDR = 0x9000000000000000
 RUST_LA_TOOLCHAIN = $(shell rustup show | grep "\(la\|loongarch\)\(64\)\?" |cut -d' ' -f1|head -n 1)
 
 
-all: clean user remake-qemu-flash-img run
+all: clean remake-qemu-flash-img run
 build: env $(KERNEL_BIN)
 env: # switch-toolchain
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
@@ -110,7 +110,7 @@ ifeq ($(ARCH), loongarch64)
 endif
 	-@rm src/linker.ld
 
-fs-img:
+fs-img: user
 ifeq ($(BOARD), 2k500)
 ifeq ($(FS_MODE), fat32)
 	@./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" "la2k500" $(MODE) fat32
@@ -131,29 +131,19 @@ else
 endif
 endif
 
-remake-qemu-flash-img: fs-img .WAIT qemu-flash-$(FS_MODE)-img
+remake-qemu-flash-img: fs-img .WAIT qemu-flash-rootfs-img
 
-qemu-flash-fat32-img:
+qemu-flash-rootfs-img:
 ifeq ($(BOARD), 2k500)
-	@./la_fat $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
+	@./la_fs $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
 else ifeq ($(BOARD), laqemu)
-	@./la_fat $(QEMU_2K500)
-	@echo QEMU_2K500
-endif
-
-qemu-flash-ext4-img:
-ifeq ($(BOARD), 2k500)
-	@./la_ext4 $(MINITERM_START_CMD) $(LA_2K500_PORT_FREQ)
-else ifeq ($(BOARD), laqemu)
-	@./la_ext4 $(QEMU_2K500)
+	@./la_fs $(QEMU_2K500)
 	@echo QEMU_2K500
 endif
 
 src-linker.ld: .FORCE
 	-@rm src/linker.ld
 	@cpp -P $(LA_2K500_DISABLE_EH_FRAME) -D $(LDBOARD) src/linker.in.ld -o src/linker.ld
-
-update-usr:user fs_img
 
 kernel: src-linker.ld
 	@echo Platform: $(BOARD)
@@ -176,7 +166,7 @@ run-inner: build do-run
 runsimple: do-run
 
 do-run:
-#First, link the image into the directory.
+# 此步会将rootfs文件夹链接到qemu-2k500/gz下
 ifeq ($(BOARD), laqemu)
 ifeq ($(FS_MODE), fat32)
 	ln -sf $(FAT32_2K500_LN) $(QEMU_2K500_DIR)/$(FAT32_IMG_LA)

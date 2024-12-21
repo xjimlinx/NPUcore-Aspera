@@ -5,7 +5,7 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 ln -sf "$SCRIPTPATH"/../tmp/qemu /tmp
 # 配置BIOS文件路径
 BIOS="$SCRIPTPATH"/u-boot-with-spl.bin
-# 将BIOS文件大小截断为1M
+# 将BIOS文件大小截断为16M
 # truncate -s 1M $BIOS
 truncate -s 16M $BIOS
 # 配置QEMU路径

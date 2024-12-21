@@ -30,7 +30,7 @@ use spin::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 lazy_static! {
     // 文件系统实例
     pub static ref FILE_SYSTEM: Arc<dyn VFS> =
-        FS_Type::mount_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
+        VFS::open_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
     // 目录树根节点
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
         let curr_fs_type = FILE_SYSTEM.get_filesystem_type();
@@ -40,7 +40,6 @@ lazy_static! {
             // 通过获取FILE_SYSTEM的类型来创建目录树的文件系统字段
             Arc::new(FileSystem::new(curr_fs_type)),
             // 系统Inode，包装了具体文件系统的Inode
-            // OSInode::new(InodeImpl::root_inode(&FILE_SYSTEM)),
             OSInode::new(VFS::root_inode(&FILE_SYSTEM)),
             // 父节点，因为是根节点所以没有父节点
             Weak::new(),
@@ -86,19 +85,24 @@ fn update_directory_vec(lock: &mut MutexGuard<(Vec<Weak<DirectoryTreeNode>>, usi
 }
 
 pub struct DirectoryTreeNode {
-    /// If this is a directory
+    /// 如果这是个目录
     /// 1. cwd 当前工作目录
     /// 2. mount point 挂载点
     /// 3. root node 根节点
     /// 如果这是个文件
-    /// 1. executed by some processes 被某些进程执行
-    /// This parameter will add 1 when opening 该参数在打开时增加1
+    /// 1. 被某些进程执行
+    /// 该参数在打开时增加1
     spe_usage: Mutex<usize>,
     name: String,
+    // 文件系统实例
     filesystem: Arc<FileSystem>,
+    // 文件
     file: Arc<dyn File>,
+    // 指向自己的弱引用
     selfptr: Mutex<Weak<Self>>,
+    // 指向父节点的弱引用
     father: Mutex<Weak<Self>>,
+    // 子节点
     children: RwLock<Option<BTreeMap<String, Arc<Self>>>>,
 }
 
@@ -117,12 +121,14 @@ impl DirectoryTreeNode {
         father: Weak<Self>,
     ) -> Arc<Self> {
         let node = Arc::new(DirectoryTreeNode {
+            // 初始化为0
             spe_usage: Mutex::new(0),
             name,
             filesystem,
             file,
             selfptr: Mutex::new(Weak::new()),
             father: Mutex::new(father),
+            // 子节点初始化为 None
             children: RwLock::new(None),
         });
         *node.selfptr.lock() = Arc::downgrade(&node);
@@ -596,8 +602,10 @@ impl DirectoryTreeNode {
                 let new_par_file = new_par_inode.file.downcast_ref::<OSInode>().unwrap();
                 new_par_file.link_child(old_last_comp, old_file)?;
             }
+            FS_Type::Ext4 => {
+                todo!()
+            }
             FS_Type::Null => return Err(EACCES),
-            FS_Type::Ext4 => return todo!(),
         }
         *value.father.lock() = Arc::downgrade(&new_par_inode.get_arc());
         new_lock.lock().as_mut().unwrap().insert(new_key, value);

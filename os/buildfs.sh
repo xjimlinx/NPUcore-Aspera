@@ -39,7 +39,7 @@ fi
 if [ "$4" = "ext4" ]
 then
     echo Making ext4 imgage with BLK_SZ=${BLK_SZ}
-    mkfs.ext4 ${U} -b ${BLK_SZ} 
+    mkfs.ext4 ${U} -b ${BLK_SZ}
     fdisk -l ${U}
 fi
 
@@ -59,7 +59,6 @@ fi
 
 # build root
 "$SUDO" mkdir -p ${U_DIR}/fs/lib
-# "$SUDO" cp ../user/lib/${ARCH}/libc.so ${U_DIR}/fs/lib
 "$SUDO" mkdir -p ${U_DIR}/fs/etc
 "$SUDO" mkdir -p ${U_DIR}/fs/bin
 "$SUDO" mkdir -p ${U_DIR}/fs/root
@@ -98,7 +97,6 @@ fi
 try_copy ../user/user_C_program/user/build/${ARCH}  ${U_DIR}/fs/syscall
 try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_DIR}/fs/
 copy_2024_testcase
-# try_copy ../user/disk/${ARCH} ${U_DIR}/fs/
 
 "$SUDO" umount ${U_DIR}/fs
 echo "DONE"

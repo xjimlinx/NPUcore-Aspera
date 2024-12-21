@@ -193,12 +193,19 @@ impl InodeTime {
 /// OSInode
 /// 对具体文件系统Inode的封装
 pub struct OSInode {
+    /// 是否可读
     readable: bool,
+    /// 是否可写
     writable: bool,
+    /// 被进程使用的计数
     special_use: bool,
+    /// 是否追加
     append: bool,
+    /// 具体的Inode
     inner: Arc<dyn InodeTrait>,
+    /// 文件偏移
     offset: Mutex<usize>,
+    /// 目录树节点指针
     dirnode_ptr: Arc<Mutex<Weak<DirectoryTreeNode>>>,
 }
 
@@ -447,6 +454,7 @@ impl File for OSInode {
             .collect())
     }
     fn create(&self, name: &str, file_type: DiskInodeType) -> Result<Arc<dyn File>, isize> {
+        // 加锁
         let inode_lock = self.inner.write();
         let new_file =
             self.inner

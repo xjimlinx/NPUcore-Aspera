@@ -6,18 +6,16 @@ use downcast_rs::{impl_downcast, DowncastSync};
 
 // 根目录项
 use super::directory_tree::ROOT;
+use super::ext4::ext4fs::Ext4FileSystem;
 use super::ext4::{Ext4Inode, Inode};
-use super::filesystem::FS_Type;
+use super::fat32::EasyFileSystem;
+use super::filesystem::{pre_mount, FS_Type};
 use super::inode::InodeTrait;
 
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
 pub trait VFS: DowncastSync {
-    // 打开文件
-    // 网上找到的资料是通过dentry
-    // 找到对应的inode
-    // 然后获取文件操作集
-    // 调用具体文件系统的open操作来完成
+    // 获取文件系统实例
     fn open(
         &self,
         block_device: Arc<dyn BlockDevice>,
@@ -65,24 +63,21 @@ impl VFS {
             FS_Type::Null => panic!("Null filesystem type does not have a root inode"),
         }
     }
+    pub fn open_fs(
+        block_device: Arc<dyn BlockDevice>,
+        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+    ) -> Arc<Self> {
+        let fs_type = pre_mount();
+        match fs_type {
+            FS_Type::Fat32 => EasyFileSystem::open(block_device, index_cache_mgr),
+            FS_Type::Ext4 => Ext4FileSystem::open(block_device, index_cache_mgr),
+            FS_Type::Null => panic!("no filesystem found"),
+        }
+    }
 }
 
 // 对不同类型文件系统文件的封装
 pub trait VFSFileContent {}
-
-// pub struct SuperBlock {
-//     // 文件系统魔数
-//     s_magic: u32,
-//     // 指向super_operations结构体的指针
-//     s_op: Option<u32>,
-//     // 指向与特定文件系统相关的私有数据结构的指针
-//     s_fs_info: Option<u32>,
-//     // 根目录 dentry
-//     s_root: ROOT,
-//     // 指向 文件系统类型结构体的指针
-//     s_type: Option<u32>,
-
-// }
 
 // 对不同类型文件系统目录的封装
 pub trait VFSDirEnt {}
