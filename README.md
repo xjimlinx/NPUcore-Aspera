@@ -87,6 +87,14 @@ make build
 make runsimple
 ```
 
+或者直接执行
+
+```bash
+# 阅读Makefile可以发现此步调用 build 和 do-run
+# 而 runsimple 也只执行 do-run
+make run-inner
+```
+
 #### 2.0.3 只改动用户程序
 
 因为实际上也是改动根文件系统，所以与 [2.0.1](####2.0.1 只改动了rootfs镜像类型) 相同
