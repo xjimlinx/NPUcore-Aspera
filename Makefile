@@ -10,14 +10,14 @@ kernel:
 run:
 	cd os && make run
 
-rootfs:
-	cd os && make remake-qemu-flash-img
-
 runsimple:
 	cd os && make runsimple
 
 change-kernel-only:
 	cd os && make build && make runsimple
+
+change-rootfs-only:
+	cd os && make remake-qemu-flash-img && make runsimple
 
 clean:
 	cd os && make clean
