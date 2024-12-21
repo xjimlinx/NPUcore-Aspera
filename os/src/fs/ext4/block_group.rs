@@ -1,10 +1,10 @@
-use alloc::{sync::Arc, vec::Vec};
-
 use super::{
     crc::{ext4_crc32c, EXT4_CRC32_INIT},
     superblock::Ext4Superblock,
     BlockDevice, EXT4_MAX_BLOCK_GROUP_DESCRIPTOR_SIZE, EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE,
 };
+use crate::lib::math::is_power_of;
+use alloc::{sync::Arc, vec::Vec};
 // use crate::arch::BLOCK_SZ;
 use super::BLOCK_SIZE;
 
@@ -363,7 +363,32 @@ impl Block {
 }
 
 impl Ext4BlockGroup {
-    pub fn dump_block_group_info(&self, blk_grp_idx: usize, blk_per_grp: usize) {
+    pub fn dump_block_group_info(
+        &self,
+        blk_grp_idx: usize,
+        blk_per_grp: usize,
+        ino_table_len: usize,
+    ) {
+        fn check_if_has_superblock(blk_grp_idx: usize) -> bool {
+            // 只有在第0个块组中才有主超级块
+            if blk_grp_idx == 0 {
+                return true;
+            }
+            // 其余的在第1或者3、5、7的幂次数块组中有备份超级块
+            if blk_grp_idx == 1 {
+                return true;
+            }
+            if is_power_of(blk_grp_idx as u64, 3) {
+                return true;
+            }
+            if is_power_of(blk_grp_idx as u64, 5) {
+                return true;
+            }
+            if is_power_of(blk_grp_idx as u64, 7) {
+                return true;
+            }
+            return false;
+        }
         // Function to combine low and high parts of the fields, now supports u16 and u32
         fn lo_hi_add_u16(lo: u16, hi: u16, shift: u32) -> u64 {
             lo as u64 + ((hi as u64) << shift)
@@ -394,12 +419,24 @@ impl Ext4BlockGroup {
         let inode_bitmap_csum =
             lo_hi_add_u16(self.inode_bitmap_csum_lo, self.inode_bitmap_csum_hi, 16);
         // Print out block group information similar to `dump2fs`
+        let blk_grp_start = blk_grp_idx * blk_per_grp;
+        let blk_grp_end = blk_grp_start + blk_per_grp - 1;
         println!(
-            "Group 0: (blocks 0-32767) checksum 0x{:x} [ITABLE_ZEROED]",
-            checksum
+            "Group {}: (blocks {}-{}) checksum 0x{:x} [ITABLE_ZEROED]",
+            blk_grp_idx, blk_grp_start, blk_grp_end, checksum
         );
-        println!("Main superblock is located at block 0, group descriptor at blocks 1-38");
-        println!("Reserved GDT blocks are located at blocks 39-1062");
+        if blk_grp_idx == 0 {
+            println!("Main superblock is located at block 0, group descriptor at blocks 1-1");
+            // println!("Reserved GDT blocks are located at blocks 39-1062");
+        } else if check_if_has_superblock(blk_grp_idx) {
+            println!(
+                "Backup superblock is located at block {}, group descriptor at blocks {}-{}",
+                blk_grp_idx,
+                blk_grp_start + 1,
+                blk_grp_start + 1
+            );
+            // println!("Reserved GDT blocks are located at blocks 39-1062");
+        }
         println!(
             "Block bitmap is at block {} (+{}), checksum 0x{:x}",
             block_bitmap, block_bitmap, block_bitmap_csum
@@ -411,7 +448,7 @@ impl Ext4BlockGroup {
         println!(
             "Inode table is at blocks {}-{} (+{})",
             inode_table,
-            inode_table + 511,
+            inode_table + ino_table_len as u64 - 1,
             inode_table
         );
         println!(

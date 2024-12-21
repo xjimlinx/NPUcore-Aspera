@@ -99,6 +99,7 @@ else
 		@sudo umount $(U_FAT32_DIR)/fs
 endif
 
+# 此步会将kernel链接到uImage
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) $@ --strip-all -O binary &
 	@$(OBJDUMP) $(KERNEL_ELF) -SC > target/$(TARGET)/$(MODE)/asm_all.txt

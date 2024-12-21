@@ -4,7 +4,9 @@ use core::ptr::addr_of;
 
 use super::block_group::{Block, Ext4BlockGroup};
 use super::superblock::SUPERBLOCK_OFFSET;
+use super::BLOCK_SIZE;
 use super::{superblock::Ext4Superblock, BlockCacheManager, BlockDevice, Cache};
+use crate::arch::BLOCK_SZ;
 use crate::drivers::BLOCK_DEVICE;
 use crate::fs::cache::BufferCache;
 use crate::fs::inode::InodeTrait;
@@ -61,7 +63,10 @@ impl Ext4FileSystem {
                     cache_mgr: ext4_cache_mgr,
                 };
                 ext4fs.superblock.dump_info();
-                // ext4fs.print_block_group(0);
+                ext4fs.print_block_group(0);
+                ext4fs.print_block_group(1);
+                ext4fs.print_block_group(2);
+                ext4fs.print_block_group(3);
                 // 尝试比较超级块内容
                 assert!(
                     ext4fs.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone())
@@ -96,8 +101,15 @@ impl Ext4FileSystem {
     pub fn print_block_group(&self, blk_grp_idx: usize) {
         let blk_per_grp = self.superblock.blocks_per_group();
         let blk_per_grp = blk_per_grp as usize;
-        self.get_block_group(0)
-            .dump_block_group_info(0, blk_per_grp);
+        // inode表长
+        let inode_size = self.superblock.inode_size();
+        let inodes_per_grp = self.superblock.inodes_per_group;
+        let ino_table_len = (inodes_per_grp as usize) * (inode_size as usize) / BLOCK_SIZE;
+        self.get_block_group(blk_grp_idx).dump_block_group_info(
+            blk_grp_idx,
+            blk_per_grp,
+            ino_table_len,
+        );
     }
     fn test_info(&self) {}
 }

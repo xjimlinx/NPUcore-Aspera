@@ -33,6 +33,7 @@ mod arch;
 mod drivers;
 mod fs;
 mod lang_items;
+mod lib;
 mod mm;
 mod syscall;
 mod task;
