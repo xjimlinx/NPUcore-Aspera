@@ -1,4 +1,4 @@
-use crate::fs::cache::{BlockCacheManager, Cache};
+use crate::fs::cache::BlockCacheManager;
 use crate::fs::BlockDevice;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -7,10 +7,10 @@ use downcast_rs::{impl_downcast, DowncastSync};
 // 根目录项
 use super::directory_tree::ROOT;
 use super::ext4::ext4fs::Ext4FileSystem;
-use super::ext4::{Ext4Inode, Inode};
+use super::ext4::Ext4Inode;
 use super::fat32::EasyFileSystem;
 use super::filesystem::{pre_mount, FS_Type};
-use super::inode::InodeTrait;
+use super::inode::{FatInode, InodeTrait};
 
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
@@ -56,10 +56,10 @@ pub trait VFS: DowncastSync {
 impl_downcast!(sync VFS);
 
 impl VFS {
-    pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<dyn InodeTrait> {
-        match efs.get_filesystem_type() {
-            FS_Type::Ext4 => Ext4Inode::root_inode(efs),
-            FS_Type::Fat32 => Inode::root_inode(efs),
+    pub fn root_inode(vfs: &Arc<dyn VFS>) -> Arc<dyn InodeTrait> {
+        match vfs.get_filesystem_type() {
+            FS_Type::Ext4 => Ext4Inode::root_inode(vfs),
+            FS_Type::Fat32 => FatInode::root_inode(vfs),
             FS_Type::Null => panic!("Null filesystem type does not have a root inode"),
         }
     }

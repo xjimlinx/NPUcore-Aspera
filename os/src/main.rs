@@ -79,7 +79,9 @@ pub fn rust_main() -> ! {
 
     //machine independent initialization
     fs::directory_tree::init_fs();
+    println!("[kernel] Init FileSystem Successfully!");
     task::add_initproc();
+    println!("[kernel] initproc added Successfully!");
 
     // note that in run_tasks(), there is yet *another* pre_start_init(),
     // which is used to turn on interrupts in some archs like LoongArch.

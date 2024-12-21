@@ -736,10 +736,14 @@ pub fn sys_chdir(path: *const u8) -> isize {
     }
 }
 
-/// dirfd: 文件所在目录的文件描述符
-/// path: 文件路径
-/// flags: 文件打开标志
-/// mode: 文件权限
+/// openat 系统调用
+/// # 参数
+/// + dirfd: 文件所在目录的文件描述符
+/// + path: 文件路径
+/// + flags: 文件打开标志
+/// + mode: 文件权限
+/// # 返回值
+/// + 文件描述符（索引）
 pub fn sys_openat(dirfd: usize, path: *const u8, flags: u32, mode: u32) -> isize {
     // 获取当前进程
     let task = current_task().unwrap();
@@ -778,7 +782,7 @@ pub fn sys_openat(dirfd: usize, path: *const u8, flags: u32, mode: u32) -> isize
         },
     };
 
-    // 尝试从上面获得的文件所在目录的文件描述符打开文件并获取新的文件描述符
+    // 尝试从上面获得的 文件所在目录的 文件描述符打开文件并获取新的文件描述符
     let new_file_descriptor = match file_descriptor.open(&path, flags, false) {
         Ok(file_descriptor) => file_descriptor,
         Err(errno) => return errno,

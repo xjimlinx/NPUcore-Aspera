@@ -47,6 +47,7 @@ pub struct TaskControlBlock {
     pub files: Arc<Mutex<FdTable>>,
     // 当前进程的文件系统状态
     pub fs: Arc<Mutex<FsStatus>>,
+    // 虚拟页表
     pub vm: Arc<Mutex<MemorySet<PageTableImpl>>>,
     pub sighand: Arc<Mutex<Vec<Option<Box<SigAction>>>>>,
     pub futex: Arc<Mutex<Futex>>,

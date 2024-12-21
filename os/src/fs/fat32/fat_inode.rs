@@ -911,15 +911,19 @@ impl InodeTrait for Inode {
         let offset = inner_cache_id % self.fs.sec_per_clus as u32;
         Some(base + offset)
     }
-    /// Read file content into buffer.
-    /// It will read from `offset` until the end of the file or buffer can't read more
-    /// This operation is ignored if start is greater than or equal to end.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// + `offset`: The start offset in file
-    /// + `buf`: The buffer to receive data
-    /// # Return Value
-    /// The number of number of bytes read.
+    /// 将文件内容读取到buffer中
+    /// # 说明
+    /// 会一直读取，直到文件的末尾或缓冲区不能再读取为止
+    ///
+    /// 这个操作会在
+    /// start >= end
+    /// 的时候被忽略
+    /// # 参数
+    /// + `inode_lock`: inode 锁
+    /// + `offset`: 文件开始读取的起始位置
+    /// + `buf`: 接受数据的buffer
+    /// # 返回值
+    /// + 读取到的字节数
     fn read_at_block_cache_rlock(
         &self,
         _inode_lock: &RwLockReadGuard<InodeLock>,

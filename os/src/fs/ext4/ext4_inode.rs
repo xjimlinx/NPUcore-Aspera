@@ -4,6 +4,7 @@ use crate::fs::{inode::InodeTrait, vfs::VFS};
 
 use super::{
     crc::{ext4_crc32c, EXT4_CRC32_INIT},
+    ext4fs::Ext4FileSystem,
     extent::{Ext4Extent, Ext4ExtentHeader, Ext4ExtentIndex},
     superblock::Ext4Superblock,
     BlockDevice, EXT4_INODE_MODE_PERM_MASK, EXT4_INODE_MODE_TYPE_MASK,
@@ -75,8 +76,10 @@ pub struct Linux2 {
 }
 
 impl Ext4Inode {
-    pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
+    pub fn root_inode(ext4fs: &Arc<dyn VFS>) -> Arc<Self> {
+        let ext4fs = Arc::downcast::<Ext4FileSystem>(ext4fs.clone()).unwrap();
         todo!()
+        // 尝试获取根目录的Inode节点
     }
 
     pub fn mode(&self) -> u16 {

@@ -1,18 +1,20 @@
-use core::slice::{Iter, IterMut};
+use super::{
+    cache::PageCache, directory_tree::DirectoryTreeNode, dirent::Dirent, file_trait::File,
+};
 use crate::{
     config::SYSTEM_FD_LIMIT,
     mm::{Frame, UserBuffer},
     syscall::errno::*,
 };
-use spin::Mutex;
-use super::{cache::PageCache, directory_tree::DirectoryTreeNode, file_trait::File, dirent::Dirent};
 use alloc::{
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
+use core::slice::{Iter, IterMut};
+use spin::Mutex;
 
-use super::layout::{OpenFlags, Stat, SeekWhence};
+use super::layout::{OpenFlags, SeekWhence, Stat};
 
 /// ### 文件描述符
 #[derive(Clone)]
@@ -93,7 +95,7 @@ impl FileDescriptor {
         }
         // 如果文件类型是常规文件并且路径不以 / 开头，则返回错误码
         // 为什么要加上后面这个条件呢？
-        // 因为如果是常规文件，那么当前目录就是文件，而文件不应该有子目录
+        // 因为如果是常规文件，那么“当前目录”就是文件，而文件不应该有子目录
         if self.file.is_file() && !path.starts_with('/') {
             return Err(ENOTDIR);
         }

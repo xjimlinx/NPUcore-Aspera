@@ -175,10 +175,19 @@ impl DirectoryTreeNode {
         self.selfptr.lock().upgrade().unwrap().clone()
     }
 
-    // 解析路径，返回一个 Vec<&str> 类型
+    /// 解析路径
+    /// # 参数
+    /// + path: 路径
+    /// # 返回值
+    /// + 一个 Vec<&str> 类型，存储路径的每一级目录
+    /// # 说明
+    /// 比如路径是“/lib/a/.././d/c”
+    /// 那么存入的内容就是
+    /// ["a", "d", "c"]
     fn parse_dir_path(path: &str) -> Vec<&str> {
         path.split('/').fold(Vec::with_capacity(8), |mut v, s| {
             match s {
+                // 去掉空字符串和当前目录
                 "" | "." => {}
                 ".." => {
                     if v.last().map_or(true, |s| *s == "..") {
@@ -322,25 +331,33 @@ impl DirectoryTreeNode {
         } else {
             path
         };
+        // 获取目录树根节点
         let inode = if path.starts_with("/") {
             &**ROOT
         } else {
             &self
         };
 
+        // 获取路径缓存
         let mut path_cache_lock = PATH_CACHE.lock();
+        // 如果路径以 '/' 开头，且路径等于缓存路径，且缓存路径的弱引用存在
         let inode = if path.starts_with('/')
             && path == path_cache_lock.0
             && path_cache_lock.1.upgrade().is_some()
         {
+            // 获取缓存路径的弱引用
             path_cache_lock.1.upgrade().unwrap()
         } else {
+            // 解析路径
             let mut components = Self::parse_dir_path(path);
+            // 获取目录栈的栈顶，也就是父目录或者文件本身
             let last_comp = components.pop();
+            // 从剩余的路径中获取父目录节点
             let inode = match inode.cd_comp(&components) {
                 Ok(inode) => inode,
                 Err(errno) => return Err(errno),
             };
+            // 若最后一个组件存在，则进行处理
             if let Some(last_comp) = last_comp {
                 let mut lock = inode.children.write();
                 match inode.try_to_open_subfile(last_comp, &mut lock) {
