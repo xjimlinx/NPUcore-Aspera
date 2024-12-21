@@ -57,7 +57,7 @@ then
 fi
 "$SUDO" mount ${U} ${U_DIR}/fs
 
-# build root
+# 创建根文件系统
 "$SUDO" mkdir -p ${U_DIR}/fs/lib
 "$SUDO" mkdir -p ${U_DIR}/fs/etc
 "$SUDO" mkdir -p ${U_DIR}/fs/bin

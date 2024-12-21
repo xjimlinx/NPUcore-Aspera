@@ -10,6 +10,7 @@ use super::BLOCK_SIZE;
 
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C, packed)]
+/// Ext4块组描述符
 pub struct Ext4BlockGroup {
     pub block_bitmap_lo: u32,            // 块位图块
     pub inode_bitmap_lo: u32,            // 节点位图块
@@ -37,19 +38,30 @@ pub struct Ext4BlockGroup {
     pub reserved: u32,                   // 填充
 }
 impl Ext4BlockGroup {
-    /// Load the block group descriptor from the disk.
+    /// 从磁盘加载块组描述符
     pub fn load_new(
         block_device: Arc<dyn BlockDevice>,
         super_block: &Ext4Superblock,
         block_group_idx: usize,
     ) -> Self {
+        // 计算一个块可以放多少块组描述符
+        // 这里因为BLOCK_SIZE是2048,而块组描述符大小为64
+        // 所以一个块可以放32个块组描述符
         let dsc_cnt = BLOCK_SIZE / super_block.desc_size as usize;
+        // 计算块组描述符在第几个块
         let dsc_id = block_group_idx / dsc_cnt;
+        // 从超级块中获取第一个数据块的块号
         let first_data_block = super_block.first_data_block;
+        // 计算所在块的块号
+        // 加上1是因为第0块是超级块
         let block_id = first_data_block as usize + dsc_id + 1;
+        // 计算偏移量
+        // 计算公式为：
+        // 块组中的偏移量 = (块组中的索引 % 每个块的块组描述符数量) * 块组描述符大小
         let offset = (block_group_idx % dsc_cnt) * super_block.desc_size as usize;
-
-        let ext4block = Block::load(block_device, block_id * BLOCK_SIZE);
+        // 从块设备读取块
+        let ext4block = Block::load_offset(block_device, block_id * BLOCK_SIZE);
+        // 使用Block的read_offset_as方法将数据读取为Ext4BlockGroup
         let bg: Ext4BlockGroup = ext4block.read_offset_as(offset);
 
         bg
@@ -130,7 +142,7 @@ impl Ext4BlockGroup {
     }
 }
 
-/// sync block group to disk
+/// 同步块组到磁盘
 impl Ext4BlockGroup {
     /// Calculate and return the checksum of the block group descriptor.
     #[allow(unused)]
@@ -267,12 +279,23 @@ pub struct Block {
 
 impl Block {
     // 从块设备读取块
-    pub fn load(block_device: Arc<dyn BlockDevice>, offset: usize) -> Self {
+    pub fn load_offset(block_device: Arc<dyn BlockDevice>, offset: usize) -> Self {
+        // let mut buf = [0u8; BLOCK_SIZE];
+        // block_device.read_block(offset, &mut buf);
+        // let data = buf.to_vec();
+        // Block {
+        //     disk_offset: offset,
+        //     data,
+        // }
+        let block_id = offset / BLOCK_SIZE;
+        Self::load(block_device, block_id)
+    }
+    pub fn load(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
         let mut buf = [0u8; BLOCK_SIZE];
-        block_device.read_block(offset, &mut buf);
+        block_device.read_block(block_id, &mut buf);
         let data = buf.to_vec();
         Block {
-            disk_offset: offset,
+            disk_offset: block_id * BLOCK_SIZE,
             data,
         }
     }
@@ -336,5 +359,64 @@ impl Block {
     // 同步内存上的数据到块设备
     pub fn sync_blk_to_disk(&self, block_device: Arc<dyn BlockDevice>) {
         block_device.write_block(self.disk_offset, &self.data);
+    }
+}
+
+impl Ext4BlockGroup {
+    pub fn dump_block_group_info(&self, blk_grp_idx: usize, blk_per_grp: usize) {
+        // Function to combine low and high parts of the fields, now supports u16 and u32
+        fn lo_hi_add_u16(lo: u16, hi: u16, shift: u32) -> u64 {
+            lo as u64 + ((hi as u64) << shift)
+        }
+
+        fn lo_hi_add_u32(lo: u32, hi: u32, shift: u32) -> u64 {
+            lo as u64 + ((hi as u64) << shift)
+        }
+
+        // Calculate the block bitmap, inode bitmap, and inode table (with high and low parts combined)
+        let block_bitmap = lo_hi_add_u32(self.block_bitmap_lo, self.block_bitmap_hi, 32);
+        let inode_bitmap = lo_hi_add_u32(self.inode_bitmap_lo, self.inode_bitmap_hi, 32);
+
+        // Use the lo_hi_add_u32 function for inode_table with a shift of 32
+        let inode_table = lo_hi_add_u32(
+            self.inode_table_first_block_lo,
+            self.inode_table_first_block_hi,
+            32,
+        );
+
+        // Use the lo_hi_add_u16 function for free_blocks, free_inodes, and used_dirs with a shift of 16
+        let free_blocks = lo_hi_add_u16(self.free_blocks_count_lo, self.free_blocks_count_hi, 16);
+        let free_inodes = lo_hi_add_u16(self.free_inodes_count_lo, self.free_inodes_count_hi, 16);
+        let used_dirs = lo_hi_add_u16(self.used_dirs_count_lo, self.used_dirs_count_hi, 16);
+        let checksum = self.checksum;
+        let block_bitmap_csum =
+            lo_hi_add_u16(self.block_bitmap_csum_lo, self.block_bitmap_csum_hi, 16);
+        let inode_bitmap_csum =
+            lo_hi_add_u16(self.inode_bitmap_csum_lo, self.inode_bitmap_csum_hi, 16);
+        // Print out block group information similar to `dump2fs`
+        println!(
+            "Group 0: (blocks 0-32767) checksum 0x{:x} [ITABLE_ZEROED]",
+            checksum
+        );
+        println!("Main superblock is located at block 0, group descriptor at blocks 1-38");
+        println!("Reserved GDT blocks are located at blocks 39-1062");
+        println!(
+            "Block bitmap is at block {} (+{}), checksum 0x{:x}",
+            block_bitmap, block_bitmap, block_bitmap_csum
+        );
+        println!(
+            "Inode bitmap is at block {} (+{}), checksum 0x{:x}",
+            inode_bitmap, inode_bitmap, inode_bitmap_csum
+        );
+        println!(
+            "Inode table is at blocks {}-{} (+{})",
+            inode_table,
+            inode_table + 511,
+            inode_table
+        );
+        println!(
+            "{} free blocks, {} free inodes, {} directories",
+            free_blocks, free_inodes, used_dirs
+        );
     }
 }

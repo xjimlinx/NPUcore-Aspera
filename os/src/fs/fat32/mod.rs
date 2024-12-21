@@ -1,7 +1,6 @@
 mod bitmap;
 pub(crate) mod dir_iter;
 mod efs;
-// pub mod inode;
 pub mod fat_inode;
 pub mod layout;
 

@@ -1,8 +1,8 @@
 use crate::fs::timestamp::format_time;
 use crate::fs::BlockDevice;
+use alloc::string::String;
 #[allow(unused)]
 use alloc::sync::Arc;
-use alloc::{format, string::String};
 use crc::{ext4_crc32c, EXT4_CRC32_INIT};
 
 use super::*;
@@ -257,6 +257,7 @@ impl Ext4Superblock {
 impl Ext4Superblock {
     pub fn dump_info(&self) {
         println!("[fs: ext4] Inodes count: {}", self.inodes_count);
+        println!("[fs: ext4] Block Group Descriptor Size: {}", self.desc_size);
         println!("[fs: ext4] Blocks count (low): {}", self.blocks_count_lo);
         println!(
             "[fs: ext4] Reserved blocks count (low): {}",
