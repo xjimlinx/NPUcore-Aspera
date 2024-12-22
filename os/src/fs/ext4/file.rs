@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use block_group::Block;
 use ext4fs::Ext4FileSystem;
 use path::path_check;
+use spin::RwLock;
 
 pub struct Ext4FileContent {
     /// The size of the file.
@@ -637,4 +638,8 @@ impl Ext4FileSystem {
 
         Ok(EOK)
     }
+}
+
+pub struct Ext4FileContentWrapper {
+    file_content_inner: RwLock<Ext4FileContent>,
 }

@@ -19,19 +19,19 @@ pub enum FS_Type {
     Ext4,
 }
 
-impl FS_Type {
-    pub fn mount_fs(
-        block_device: Arc<dyn BlockDevice>,
-        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
-    ) -> Arc<dyn VFS> {
-        let fs_type = pre_mount();
-        match fs_type {
-            FS_Type::Fat32 => EasyFileSystem::open(block_device, index_cache_mgr),
-            FS_Type::Ext4 => Ext4FileSystem::open(block_device, index_cache_mgr),
-            FS_Type::Null => panic!("no filesystem found"),
-        }
-    }
-}
+// impl FS_Type {
+//     pub fn mount_fs(
+//         block_device: Arc<dyn BlockDevice>,
+//         index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+//     ) -> Arc<dyn VFS> {
+//         let fs_type = pre_mount();
+//         match fs_type {
+//             FS_Type::Fat32 => EasyFileSystem::open(block_device, index_cache_mgr),
+//             FS_Type::Ext4 => Arc::new(Ext4FileSystem::open_ext4rs(block_device, index_cache_mgr)),
+//             FS_Type::Null => panic!("no filesystem found"),
+//         }
+//     }
+// }
 
 pub struct FileSystem {
     pub fs_id: usize,

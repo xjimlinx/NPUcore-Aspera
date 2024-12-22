@@ -6,16 +6,18 @@ use super::block_group::{Block, Ext4BlockGroup};
 use super::direntry::{Ext4DirEntry, Ext4DirSearchResult};
 use super::path::path_check;
 use super::superblock::SUPERBLOCK_OFFSET;
+use super::*;
 use super::{superblock::Ext4Superblock, BlockCacheManager, BlockDevice, Cache};
-use super::{Ext4InodeRef, InodeFileType, BLOCK_SIZE, EOK, ROOT_INODE};
 use crate::arch::BLOCK_SZ;
 use crate::drivers::BLOCK_DEVICE;
 use crate::fs::cache::BufferCache;
 use crate::fs::ext4::error::{Errno, Ext4Error};
+use crate::fs::file_trait::File;
 use crate::fs::inode::InodeTrait;
 use crate::fs::vfs::VFS;
 use crate::{arch, fs::filesystem::FS_Type};
 use alloc::{sync::Arc, vec::Vec};
+use spin::Mutex;
 type SuperBlock = Ext4Superblock;
 
 /// Ext4文件系统对象实例
@@ -24,29 +26,41 @@ pub struct Ext4FileSystem {
     pub block_device: Arc<dyn BlockDevice>,
     /// 超级块信息
     pub superblock: SuperBlock,
-    /// 块大小
-    pub block_size: usize,
-    /// 每组块的数量
-    pub block_group_count: u32,
-    /// Inode表的起始块号
-    pub inode_table_start_block: u32,
+    // /// 块大小
+    // pub block_size: usize,
+    // /// 每组块的数量
+    // pub block_group_count: u32,
+    // /// Inode表的起始块号
+    // pub inode_table_start_block: u32,
     /// 缓存管理器
     pub cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
 }
 
 impl Ext4FileSystem {
-    /// Opens and loads an Ext4 from the `block_device`.
-    // pub fn open_ext4rs(block_device: Arc<dyn BlockDevice>) -> Self {
-    //     // Load the superblock
-    //     let block = Block::load_offset(block_device.clone(), SUPERBLOCK_OFFSET);
-    //     let superblock: Ext4Superblock = block.read_as();
-
-    //     Ext4FileSystem {
-    //         block_device,
-    //         superblock,
-    //     }
-    // }
-    // with dir result search path offset
+    // Opens and loads an Ext4 from the `block_device`.
+    pub fn open_ext4rs(
+        block_device: Arc<dyn BlockDevice>,
+        index_cache_mgr: Arc<Mutex<BlockCacheManager>>,
+    ) -> Self {
+        // Load the superblock
+        let block = Block::load_id(block_device.clone(), 0);
+        let superblock: Ext4Superblock = block.read_offset_as(SUPERBLOCK_OFFSET);
+        let cache_mgr = index_cache_mgr.clone();
+        let ext4fs = Ext4FileSystem {
+            block_device,
+            superblock,
+            cache_mgr,
+        };
+        ext4fs.test_info();
+        ext4fs
+    }
+    /// with dir result search path offset
+    /// # 参数
+    /// + path: 路径
+    /// + parent_inode_num: 父目录Inode节点号
+    /// + create: 是否创建目标文件
+    /// + ftype: 文件类型
+    /// + name_off: 路径中当前处理部分的偏移量,用来记录已经处理的路径部分的偏移量
     pub fn generic_open(
         &self,
         path: &str,
@@ -64,24 +78,43 @@ impl Ext4FileSystem {
         let mut dir_search_result = Ext4DirSearchResult::new(Ext4DirEntry::default());
 
         loop {
+            // 路径可能包含多个斜杠
+            // 每遇到一个就跳过一个，并将偏移量 name_off 加 1
             while search_path.starts_with('/') {
                 *name_off += 1; // Skip the slash
                 search_path = &search_path[1..];
             }
-
+            // 使用 path_check 检查当前路径，并返回当前部分的长度 len
             let len = path_check(search_path, &mut is_goal);
 
+            // 路径中的当前部分
+            // 比如usr
+            // 或者lib
+            // 亦或者1.txt之类的
             let current_path = &search_path[..len];
 
+            // 路径长度若为 0 或者路径为空
+            // 退出
             if len == 0 || search_path.is_empty() {
                 break;
             }
 
             search_path = &search_path[len..];
 
+            // 使用dir_find_entry查找当前父目录下是否存在current_path对应的文件或者目录
             let r = self.dir_find_entry(*parent, current_path, &mut dir_search_result);
+            // match r {
+            //     Ok(_) => {}
+            //     Err(errno) => {
+            //         panic!("[failed in ext4fs generic_open function!] {:?}", errno)
+            //     }
+            // }
 
-            // log::trace!("find in parent {:x?} r {:?} name {:?}", parent, r, current_path);
+            println!(
+                "find in parent {:x?} r {:?} name {:?}",
+                parent, r, current_path
+            );
+            // 查找失败
             if let Err(e) = r {
                 if e.error() != Errno::ENOENT.into() || !create {
                     // return_errno_with_message!(Errno::ENOENT, "No such file or directory");
@@ -90,6 +123,7 @@ impl Ext4FileSystem {
                         Ext4Error::with_message(Errno::ENOENT, "No such file or directory");
                 }
 
+                // 创建新 inode
                 let mut inode_mode = 0;
                 if is_goal {
                     inode_mode = ftype;
@@ -108,19 +142,22 @@ impl Ext4FileSystem {
             if is_goal {
                 break;
             } else {
-                // update parent
+                // 更新父目录Inode节点号
                 *parent = dir_search_result.dentry.inode;
             }
             *name_off += len as u32;
         }
 
+        // 下面的两行好像一模一样？？？？
+        // 目标文件已找到时退出
+        // 返回找到的inode号
         if is_goal {
             return Ok(dir_search_result.dentry.inode);
         }
 
         Ok(dir_search_result.dentry.inode)
     }
-    pub fn open(
+    pub fn open_old(
         block_device: Arc<dyn BlockDevice>,
         index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
     ) -> Arc<Self> {
@@ -138,27 +175,19 @@ impl Ext4FileSystem {
             .read(SUPERBLOCK_OFFSET, |super_block: &SuperBlock| {
                 // 创建ext4实例
                 let ext4fs = Self {
-                    block_device: block_device,
+                    block_device,
                     /// 超级块信息
                     superblock: super_block.clone(),
-                    /// 块大小
-                    block_size: super_block.block_size() as usize,
-                    /// 每组块的数量
-                    block_group_count: super_block.blocks_per_group(),
-                    /// Inode表的起始块号
-                    inode_table_start_block: super_block.get_inode_table_start(),
+                    // /// 块大小
+                    // block_size: super_block.block_size() as usize,
+                    // /// 每组块的数量
+                    // block_group_count: super_block.blocks_per_group(),
+                    // /// Inode表的起始块号
+                    // inode_table_start_block: super_block.get_inode_table_start(),
                     /// 缓存管理器
                     cache_mgr: ext4_cache_mgr,
                 };
-                ext4fs.superblock.dump_info();
-                ext4fs.print_block_group(0);
-                ext4fs.print_block_group(1);
-                ext4fs.print_block_group(2);
-                ext4fs.print_block_group(3);
-                // 尝试比较超级块内容
-                assert!(
-                    ext4fs.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone())
-                );
+                ext4fs.test_info();
                 Arc::new(ext4fs)
             })
     }
@@ -227,27 +256,151 @@ impl Ext4FileSystem {
             ino_table_len,
         );
     }
-    fn test_info(&self) {}
+    fn test_info(&self) {
+        self.superblock.dump_info();
+        self.print_block_group(0);
+        self.print_block_group(1);
+        self.print_block_group(2);
+        self.print_block_group(3);
+        // 尝试比较超级块内容
+        assert!(self.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone()));
+        self.test_get_file("remove.lua");
+    }
 }
 
 impl VFS for Ext4FileSystem {
     fn alloc_blocks(&self, blocks: usize) -> Vec<usize> {
         self.alloc_blocks(blocks)
     }
-    fn open(
-        &self,
-        block_device: Arc<dyn BlockDevice>,
-        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
-    ) -> Arc<Self>
-    where
-        Self: Sized,
-    {
-        self.open(block_device, index_cache_mgr)
-    }
     fn get_filesystem_type(&self) -> FS_Type {
         FS_Type::Ext4
     }
-    // fn root_inode(&self) -> Arc<dyn InodeTrait> {
-    //     todo!();
-    // }
+}
+
+impl File for Ext4FileSystem {
+    fn deep_clone(&self) -> Arc<dyn File> {
+        todo!()
+    }
+
+    fn readable(&self) -> bool {
+        todo!()
+    }
+
+    fn writable(&self) -> bool {
+        todo!()
+    }
+
+    fn read(&self, offset: Option<&mut usize>, buf: &mut [u8]) -> usize {
+        todo!()
+    }
+
+    fn write(&self, offset: Option<&mut usize>, buf: &[u8]) -> usize {
+        todo!()
+    }
+
+    fn r_ready(&self) -> bool {
+        todo!()
+    }
+
+    fn w_ready(&self) -> bool {
+        todo!()
+    }
+
+    fn read_user(&self, offset: Option<usize>, buf: crate::mm::UserBuffer) -> usize {
+        todo!()
+    }
+
+    fn write_user(&self, offset: Option<usize>, buf: crate::mm::UserBuffer) -> usize {
+        todo!()
+    }
+
+    fn get_size(&self) -> usize {
+        todo!()
+    }
+
+    fn get_stat(&self) -> crate::fs::Stat {
+        todo!()
+    }
+
+    fn get_file_type(&self) -> crate::fs::DiskInodeType {
+        todo!()
+    }
+
+    fn info_dirtree_node(
+        &self,
+        dirnode_ptr: alloc::sync::Weak<crate::fs::directory_tree::DirectoryTreeNode>,
+    ) {
+        todo!()
+    }
+
+    fn get_dirtree_node(&self) -> Option<Arc<crate::fs::directory_tree::DirectoryTreeNode>> {
+        todo!()
+    }
+
+    fn open(&self, flags: crate::fs::OpenFlags, special_use: bool) -> Arc<dyn File> {
+        todo!()
+    }
+
+    fn open_subfile(&self) -> Result<Vec<(alloc::string::String, Arc<dyn File>)>, isize> {
+        todo!()
+    }
+
+    fn create(
+        &self,
+        name: &str,
+        file_type: crate::fs::DiskInodeType,
+    ) -> Result<Arc<dyn File>, isize> {
+        todo!()
+    }
+
+    fn link_child(&self, name: &str, child: &Self) -> Result<(), isize>
+    where
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn unlink(&self, delete: bool) -> Result<(), isize> {
+        todo!()
+    }
+
+    fn get_dirent(&self, count: usize) -> Vec<crate::fs::Dirent> {
+        todo!()
+    }
+
+    fn lseek(&self, offset: isize, whence: crate::fs::SeekWhence) -> Result<usize, isize> {
+        todo!()
+    }
+
+    fn modify_size(&self, diff: isize) -> Result<(), isize> {
+        todo!()
+    }
+
+    fn truncate_size(&self, new_size: usize) -> Result<(), isize> {
+        todo!()
+    }
+
+    fn set_timestamp(&self, ctime: Option<usize>, atime: Option<usize>, mtime: Option<usize>) {
+        todo!()
+    }
+
+    fn get_single_cache(&self, offset: usize) -> Result<Arc<Mutex<PageCache>>, ()> {
+        todo!()
+    }
+
+    fn get_all_caches(&self) -> Result<Vec<Arc<Mutex<PageCache>>>, ()> {
+        todo!()
+    }
+
+    fn oom(&self) -> usize {
+        todo!()
+    }
+
+    fn hang_up(&self) -> bool {
+        todo!()
+    }
+
+    fn fcntl(&self, cmd: u32, arg: u32) -> isize {
+        todo!()
+    }
 }

@@ -7,22 +7,24 @@ use downcast_rs::{impl_downcast, DowncastSync};
 // 根目录项
 use super::directory_tree::ROOT;
 use super::ext4::ext4fs::Ext4FileSystem;
+use super::ext4::layout::Ext4OSInode;
 use super::ext4::Ext4Inode;
 use super::fat32::EasyFileSystem;
+use super::file_trait::File;
 use super::filesystem::{pre_mount, FS_Type};
-use super::inode::{FatInode, InodeTrait};
+use super::inode::{FatInode, InodeTrait, OSInode};
 
 // VFS trait, 实现了该trait的文件系统都应该可以直接
 // 被 NPUcore 支持
 pub trait VFS: DowncastSync {
     // 获取文件系统实例
-    fn open(
-        &self,
-        block_device: Arc<dyn BlockDevice>,
-        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
-    ) -> Arc<Self>
-    where
-        Self: Sized;
+    // fn open(
+    //     &self,
+    //     block_device: Arc<dyn BlockDevice>,
+    //     index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+    // ) -> Arc<Self>
+    // where
+    //     Self: Sized;
 
     // 关闭文件
     fn close(&self) -> () {
@@ -50,8 +52,6 @@ pub trait VFS: DowncastSync {
     fn alloc_blocks(&self, blocks: usize) -> Vec<usize>;
 
     fn get_filesystem_type(&self) -> FS_Type;
-
-    // fn root_inode(&self) -> Arc<dyn InodeTrait>;
 }
 impl_downcast!(sync VFS);
 
@@ -70,8 +70,20 @@ impl VFS {
         let fs_type = pre_mount();
         match fs_type {
             FS_Type::Fat32 => EasyFileSystem::open(block_device, index_cache_mgr),
-            FS_Type::Ext4 => Ext4FileSystem::open(block_device, index_cache_mgr),
+            // FS_Type::Ext4 => Ext4FileSystem::open(block_device, index_cache_mgr),
+            FS_Type::Ext4 => Arc::new(Ext4FileSystem::open_ext4rs(block_device, index_cache_mgr)),
             FS_Type::Null => panic!("no filesystem found"),
+        }
+    }
+    pub fn root_osinode(vfs: &Arc<dyn VFS>) -> Arc<dyn File> {
+        match vfs.get_filesystem_type() {
+            FS_Type::Fat32 => OSInode::new(FatInode::root_inode(vfs)),
+            FS_Type::Ext4 => {
+                let vfs_concrete = Arc::downcast::<Ext4FileSystem>(vfs.clone()).unwrap();
+                todo!()
+                // Ext4OSInode::new(root_inode, vfs_concrete, file_content_wrapper)
+            }
+            FS_Type::Null => panic!("Null filesystem type does not have a root inode"),
         }
     }
 }

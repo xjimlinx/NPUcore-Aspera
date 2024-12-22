@@ -2,8 +2,8 @@
 use crate::{
     copy_from_name1, copy_to_name1,
     fs::{
-        directory_tree::DirectoryTreeNode, file_trait::File, inode::InodeTrait, DiskInodeType,
-        OpenFlags,
+        directory_tree::DirectoryTreeNode, file_trait::File, inode::InodeTrait, vfs::VFS,
+        DiskInodeType, OpenFlags,
     },
     lang_items::Bytes,
 };
@@ -13,7 +13,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-use spin::Mutex;
+use spin::{Mutex, RwLock};
 
 use core::{
     convert::TryInto,
@@ -22,7 +22,11 @@ use core::{
     ptr::{addr_of, addr_of_mut},
 };
 
-use super::Ext4Inode;
+use super::{
+    ext4fs::Ext4FileSystem,
+    file::{Ext4FileContent, Ext4FileContentWrapper},
+    Ext4Inode,
+};
 
 // 可能后续会用到？
 pub enum ExtType {
@@ -42,24 +46,44 @@ pub struct Ext4OSInode {
     /// 是否追加
     append: bool,
     /// 具体的Inode
-    inner: Arc<Ext4Inode>,
+    inode: Arc<Ext4Inode>,
     /// 文件偏移
     offset: Mutex<usize>,
     /// 目录树节点指针
     dirnode_ptr: Arc<Mutex<Weak<DirectoryTreeNode>>>,
+    /// ext4fs实例
+    ext4fs: Arc<Ext4FileSystem>,
+    // 文件
+    file_content_wrapper: Arc<Ext4FileContentWrapper>,
 }
 
 impl Ext4OSInode {
-    pub fn new(root_inode: Arc<Ext4Inode>) -> Arc<dyn File> {
+    pub fn new(
+        root_inode: Arc<Ext4Inode>,
+        ext4fs: Arc<Ext4FileSystem>,
+        file_content_wrapper: Arc<Ext4FileContentWrapper>,
+    ) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
             writable: true,
             special_use: true,
             append: false,
-            inner: root_inode,
+            inode: root_inode,
             offset: Mutex::new(0),
             dirnode_ptr: Arc::new(Mutex::new(Weak::new())),
+            ext4fs,
+            file_content_wrapper,
         })
+    }
+}
+
+impl Ext4OSInode {
+    pub fn first_root_inode(ext4fs: &Arc<dyn VFS>) -> Arc<dyn File> {
+        let ext4fs_concrete = Arc::downcast::<Ext4FileSystem>(ext4fs.clone()).unwrap();
+        // 先获取ROOT_INODE
+
+        // let ext4_root_inode = Ext4OSInode::new(root_inode, ext4fs_concrete, file_content_wrapper);
+        todo!()
     }
 }
 
@@ -90,9 +114,11 @@ impl File for Ext4OSInode {
             writable: self.writable,
             special_use: self.special_use,
             append: self.append,
-            inner: self.inner.clone(),
+            inode: self.inode.clone(),
             offset: Mutex::new(*self.offset.lock()),
             dirnode_ptr: self.dirnode_ptr.clone(),
+            ext4fs: self.ext4fs.clone(),
+            file_content_wrapper: self.file_content_wrapper.clone(),
         })
     }
 
@@ -107,13 +133,13 @@ impl File for Ext4OSInode {
     fn read(&self, offset: Option<&mut usize>, buffer: &mut [u8]) -> usize {
         match offset {
             Some(offset) => {
-                let len = self.inner.read_at_block_cache(*offset, buffer);
+                let len = self.inode.read_at_block_cache(*offset, buffer);
                 *offset += len;
                 len
             }
             None => {
                 let mut offset = self.offset.lock();
-                let len = self.inner.read_at_block_cache(*offset, buffer);
+                let len = self.inode.read_at_block_cache(*offset, buffer);
                 *offset += len;
                 len
             }
@@ -141,7 +167,7 @@ impl File for Ext4OSInode {
     }
 
     fn get_size(&self) -> usize {
-        self.inner.get_file_size() as usize
+        self.inode.get_file_size() as usize
     }
 
     fn get_stat(&self) -> crate::fs::Stat {
@@ -149,7 +175,7 @@ impl File for Ext4OSInode {
     }
 
     fn get_file_type(&self) -> DiskInodeType {
-        self.inner.get_file_type()
+        self.inode.get_file_type()
     }
 
     fn info_dirtree_node(&self, dirnode_ptr: Weak<DirectoryTreeNode>) {
@@ -161,15 +187,7 @@ impl File for Ext4OSInode {
     }
 
     fn open(&self, flags: OpenFlags, special_use: bool) -> Arc<dyn File> {
-        Arc::new(Self {
-            readable: flags.contains(OpenFlags::O_RDONLY) || flags.contains(OpenFlags::O_RDWR),
-            writable: flags.contains(OpenFlags::O_WRONLY) || flags.contains(OpenFlags::O_RDWR),
-            special_use,
-            append: flags.contains(OpenFlags::O_APPEND),
-            inner: self.inner.clone(),
-            offset: Mutex::new(0),
-            dirnode_ptr: self.dirnode_ptr.clone(),
-        })
+        todo!()
     }
 
     fn open_subfile(&self) -> Result<Vec<(String, Arc<dyn File>)>, isize> {
@@ -212,7 +230,14 @@ impl File for Ext4OSInode {
     }
 
     fn set_timestamp(&self, ctime: Option<usize>, atime: Option<usize>, mtime: Option<usize>) {
+        let atime = atime.unwrap();
+        let ctime = ctime.unwrap();
+        let mtime = mtime.unwrap();
+        // TODO:
         todo!()
+        // self.inode.set_atime(atime as u32);
+        // self.inode.set_ctime(ctime as u32);
+        // self.inode.set_mtime(mtime as u32);
     }
 
     fn get_single_cache(&self, offset: usize) -> Result<Arc<Mutex<super::PageCache>>, ()> {
@@ -223,15 +248,20 @@ impl File for Ext4OSInode {
         todo!()
     }
 
+    /// 这个先不考虑实现
     fn oom(&self) -> usize {
         todo!()
     }
 
+    /// 这个也一样
     fn hang_up(&self) -> bool {
         todo!()
     }
 
+    /// 这个也一样
     fn fcntl(&self, cmd: u32, arg: u32) -> isize {
         todo!()
     }
 }
+
+impl Ext4Inode {}

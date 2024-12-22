@@ -123,16 +123,16 @@ impl VFS for EasyFileSystem {
     fn alloc_blocks(&self, blocks: usize) -> Vec<usize> {
         self.alloc_blocks(blocks)
     }
-    fn open(
-        &self,
-        block_device: Arc<dyn BlockDevice>,
-        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
-    ) -> Arc<Self>
-    where
-        Self: Sized,
-    {
-        EasyFileSystem::open(block_device, index_cache_mgr)
-    }
+    // fn open(
+    //     &self,
+    //     block_device: Arc<dyn BlockDevice>,
+    //     index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+    // ) -> Arc<Self>
+    // where
+    //     Self: Sized,
+    // {
+    //     EasyFileSystem::open(block_device, index_cache_mgr)
+    // }
     fn get_filesystem_type(&self) -> crate::fs::FS_Type {
         crate::fs::FS_Type::Fat32
     }

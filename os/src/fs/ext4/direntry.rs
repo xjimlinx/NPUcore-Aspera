@@ -279,9 +279,16 @@ impl Ext4FileSystem {
         name: &str,
         result: &mut Ext4DirSearchResult,
     ) -> Result<usize, Ext4Error> {
-        // load parent inode
+        println!("[fstest] current parent_inode is {:?}", parent_inode);
+        // 加载父目录Inode
         let parent = self.get_inode_ref(parent_inode);
+        println!("{:#?}", parent);
         assert!(parent.inode.is_dir());
+        println!(
+            "[fstest] successfully get inode ref for inode no.{:?}",
+            parent_inode
+        );
+        // assert!(parent.inode.)
 
         // start from the first logical block
         let mut iblock = 0;

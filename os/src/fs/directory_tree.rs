@@ -30,7 +30,9 @@ use spin::{Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 lazy_static! {
     // 文件系统实例
     pub static ref FILE_SYSTEM: Arc<dyn VFS> =
-        VFS::open_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
+        <dyn VFS>::open_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
+    // ROOT 用到的 具有File Trait的节点
+    pub static ref ROOT_OSINODE: Arc<dyn File> = todo!();
     // 目录树根节点
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
         let curr_fs_type = FILE_SYSTEM.get_filesystem_type();
@@ -39,8 +41,9 @@ lazy_static! {
             "".to_string(),
             // 通过获取FILE_SYSTEM的类型来创建目录树的文件系统字段
             Arc::new(FileSystem::new(curr_fs_type)),
-            // 系统Inode，包装了具体文件系统的Inode
-            OSInode::new(VFS::root_inode(&FILE_SYSTEM)),
+            // // 系统Inode，包装了具体文件系统的Inode
+            // OSInode::new(<dyn VFS>::root_inode(&FILE_SYSTEM)),
+            <dyn VFS>::root_osinode(&FILE_SYSTEM),
             // 父节点，因为是根节点所以没有父节点
             Weak::new(),
         );

@@ -12,6 +12,7 @@ mod ialloc;
 pub mod layout;
 mod path;
 mod superblock;
+mod test;
 #[allow(unused)]
 pub use super::cache::{BlockCacheManager, BufferCache, Cache, PageCache, PageCacheManager};
 pub use crate::drivers::block::BlockDevice;
