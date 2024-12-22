@@ -265,6 +265,7 @@ impl Ext4FileSystem {
         // 尝试比较超级块内容
         assert!(self.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone()));
         self.test_get_file("remove.lua");
+        println!("Finish the test");
     }
 }
 
