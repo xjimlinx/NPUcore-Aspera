@@ -39,3 +39,4 @@ Doc/**/*.jpg
 Doc/**/*.png
 os/qemu.log
 rootfs-ext4.log
+/os/read_test
