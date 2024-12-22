@@ -806,7 +806,7 @@ impl Ext4FileSystem {
         // The problem is happened here
         let mut ext4block = Block::load_offset(self.block_device.clone(), offset);
 
-        let inode: &mut Ext4Inode = ext4block.read_as_mut();
+        let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
 
         Ext4InodeRef {
             inode_num: inode_num,

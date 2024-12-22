@@ -42,8 +42,8 @@ impl Ext4FileSystem {
         block_device: Arc<dyn BlockDevice>,
         index_cache_mgr: Arc<Mutex<BlockCacheManager>>,
     ) -> Self {
-        // Load the superblock
-        let block = Block::load_id(block_device.clone(), 0);
+        // 读取超级块
+        let block = Block::load_offset(block_device.clone(), 0);
         let superblock: Ext4Superblock = block.read_offset_as(SUPERBLOCK_OFFSET);
         let cache_mgr = index_cache_mgr.clone();
         let ext4fs = Ext4FileSystem {

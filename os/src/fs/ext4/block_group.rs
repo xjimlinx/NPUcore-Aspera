@@ -279,12 +279,12 @@ pub struct Block {
 
 impl Block {
     /// 使用块号加载一个块
-    pub fn load_id(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
+    pub fn load_id(block_device: Arc<dyn BlockDevice>, block_id: usize, offset: usize) -> Self {
         let mut buf = [0u8; BLOCK_SIZE];
         block_device.read_block(block_id, &mut buf);
         let data = buf.to_vec();
         Block {
-            disk_offset: block_id * BLOCK_SIZE,
+            disk_offset: offset,
             data,
         }
     }
@@ -301,7 +301,7 @@ impl Block {
         //     data,
         // }
         let block_id = offset / BLOCK_SIZE;
-        Self::load_id(block_device, block_id)
+        Self::load_id(block_device, block_id, offset)
     }
     // pub fn load(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
     //     let mut buf = [0u8; BLOCK_SIZE];
@@ -333,6 +333,8 @@ impl Block {
     // 将读到的块作为指定的类型，同时附带一个偏移量
     pub fn read_offset_as<T>(&self, offset: usize) -> T {
         unsafe {
+            let offset = offset % BLOCK_SIZE;
+            println!("[fstest block]Current Offset is {}", offset);
             let ptr = self.data.as_ptr().add(offset) as *const T;
             let value = ptr.read_unaligned();
             value
