@@ -111,7 +111,7 @@ ifeq ($(ARCH), loongarch64)
 endif
 	-@rm src/linker.ld
 
-fs-img: user
+fs-img:
 ifeq ($(BOARD), 2k500)
 ifeq ($(FS_MODE), fat32)
 	@./buildfs.sh "$(U_FAT32_DIR)/$(FAT32_IMG_NAME)" "la2k500" $(MODE) fat32
@@ -132,7 +132,9 @@ else
 endif
 endif
 
-remake-qemu-flash-img: fs-img .WAIT qemu-flash-rootfs-img
+remake-qemu-flash-img: user fs-img .WAIT qemu-flash-rootfs-img
+
+remake-qemu-flash-img-without-user: fs-img qemu-flash-rootfs-img
 
 qemu-flash-rootfs-img:
 ifeq ($(BOARD), 2k500)
