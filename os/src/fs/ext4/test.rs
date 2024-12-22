@@ -17,12 +17,15 @@ impl Ext4FileSystem {
         // 读取文件内容
         let bytes_read = self.read_at(child_inode, 0 as usize, &mut data);
         if bytes_read.unwrap() < read_size {
-            println!("End of file reached, bytes read: {:?}", bytes_read);
+            println!(
+                "[kernel readtest] End of file reached, bytes read: {:?}",
+                bytes_read
+            );
         }
         let valid_data = &data[0..bytes_read.unwrap()];
         let text = String::from_utf8_lossy(&valid_data);
         let unescaped_data = unescape_char(&text);
-        println!("Read Data at {:?}", path);
+        println!("[kernel readtest] Read Data at {:?}", path);
         print!("{}", unescaped_data);
     }
 }

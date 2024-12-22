@@ -103,24 +103,22 @@ impl Ext4FileSystem {
 
             // 使用dir_find_entry查找当前父目录下是否存在current_path对应的文件或者目录
             let r = self.dir_find_entry(*parent, current_path, &mut dir_search_result);
-            // match r {
-            //     Ok(_) => {}
-            //     Err(errno) => {
-            //         panic!("[failed in ext4fs generic_open function!] {:?}", errno)
-            //     }
-            // }
+            match r {
+                Ok(_) => {
+                    println!(
+                        "[kernel generic_open] Find in parent {:x?} r {:?} name {:?}",
+                        parent, r, current_path
+                    );
+                }
+                Err(errno) => {
+                    println!("[failed in ext4fs generic_open function!] {:?}", errno)
+                }
+            }
 
-            println!(
-                "find in parent {:x?} r {:?} name {:?}",
-                parent, r, current_path
-            );
             // 查找失败
             if let Err(e) = r {
                 if e.error() != Errno::ENOENT.into() || !create {
-                    // return_errno_with_message!(Errno::ENOENT, "No such file or directory");
-                    println!("[kernel ext4fs] No such file or directory");
-                    let errnomsg =
-                        Ext4Error::with_message(Errno::ENOENT, "No such file or directory");
+                    println!("[kernel generic_open] No such file or directory");
                 }
 
                 // 创建新 inode
@@ -265,6 +263,8 @@ impl Ext4FileSystem {
         // 尝试比较超级块内容
         assert!(self.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone()));
         self.test_get_file("remove.lua");
+        self.test_get_file("/remove.lua");
+        self.test_get_file("/busybox_cmd.txt");
         println!("Finish the test");
     }
 }

@@ -10,7 +10,13 @@ pub fn is_leap_year(year: u32) -> bool {
     year % 4 == 0 && year % 100 != 0 || year % 400 == 0
 }
 
-// 时间格式化
+/// 时间格式化
+/// # 参数
+/// + timestamp: 时间戳 单位为秒
+/// # 返回值
+/// + 计算好的标准格式的时间 xxxx-xx-xx xx:xx:xx
+/// # 说明
+/// + 返回的时间是UTC时间，所以与本地时间也就是北京时间相差8小时
 pub fn format_time(timestamp: u32) -> String {
     let mut days_since_epoch = timestamp / SECONDS_PER_DAY;
     let remaining_seconds = timestamp % SECONDS_PER_DAY;

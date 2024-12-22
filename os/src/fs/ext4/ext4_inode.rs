@@ -776,32 +776,17 @@ impl Ext4FileSystem {
         // 加载块组描述符
         let block_group =
             Ext4BlockGroup::load_new(self.block_device.clone(), &super_block, group as usize);
-        // for temporary test
-        println!("\n\nFor temporary test, should be removed\n\n");
-        block_group.dump_block_group_info(
-            group as usize,
-            super_block.blocks_per_group() as usize,
-            1024,
-        );
         // 获取inode表块号
         let inode_table_blk_num = block_group.get_inode_table_blk_num();
-        println!("Current inode_table_blk_num is {}", inode_table_blk_num);
         // 计算字节偏移量
-        // 这个计算公式可能有问题
-        println!("index is {} and inode_size is {}", index, inode_size);
         let offset =
             inode_table_blk_num as usize * BLOCK_SIZE + index as usize * inode_size as usize;
-        // inode_table_blk_num as usize * BLOCK_SIZE + (index as usize + 1) * inode_size as usize;
         offset
     }
 
     /// Load the inode reference from the disk.
     pub fn get_inode_ref(&self, inode_num: u32) -> Ext4InodeRef {
         let offset = self.inode_disk_pos(inode_num);
-        println!(
-            "[fstest] read offset in get_inode_ref is {}, and current inode_num is {}",
-            offset, inode_num
-        );
 
         // The problem is happened here
         let mut ext4block = Block::load_offset(self.block_device.clone(), offset);

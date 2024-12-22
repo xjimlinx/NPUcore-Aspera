@@ -279,16 +279,10 @@ impl Ext4FileSystem {
         name: &str,
         result: &mut Ext4DirSearchResult,
     ) -> Result<usize, Ext4Error> {
-        println!("[fstest] current parent_inode is {:?}", parent_inode);
         // 加载父目录Inode
         let parent = self.get_inode_ref(parent_inode);
-        println!("{:#?}", parent);
+        println!("[kernel dir_find_entry] Get Parent InodeRef: {:#?}", parent);
         assert!(parent.inode.is_dir());
-        println!(
-            "[fstest] successfully get inode ref for inode no.{:?}",
-            parent_inode
-        );
-        // assert!(parent.inode.)
 
         // start from the first logical block
         let mut iblock = 0;
@@ -322,16 +316,13 @@ impl Ext4FileSystem {
                     return Ok(EOK);
                 }
             } else {
-                // return_errno_with_message!(Errno::ENOENT, "dir search fail")
                 println!("[kernel direntry] dir search fail");
-                // return Err(Errno::ENOENT);
                 return Err(Ext4Error::new(Errno::ENOENT));
             }
             // go to next block
             iblock += 1
         }
 
-        // return_errno_with_message!(Errno::ENOENT, "dir search fail");
         println!("[kernel direntry] dir search fail");
         return Err(Ext4Error::new(Errno::ENOENT));
     }

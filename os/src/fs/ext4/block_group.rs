@@ -334,7 +334,6 @@ impl Block {
     pub fn read_offset_as<T>(&self, offset: usize) -> T {
         unsafe {
             let offset = offset % BLOCK_SIZE;
-            println!("[fstest block]Current Offset is {}", offset);
             let ptr = self.data.as_ptr().add(offset) as *const T;
             let value = ptr.read_unaligned();
             value
@@ -352,6 +351,7 @@ impl Block {
     // 将读到的块作为指定的类型，同时附带一个偏移量，并且返回一个可变引用
     pub fn read_offset_as_mut<T>(&mut self, offset: usize) -> &mut T {
         unsafe {
+            let offset = offset % BLOCK_SIZE;
             let ptr = self.data.as_mut_ptr().add(offset) as *mut T;
             &mut *ptr
         }
@@ -373,7 +373,10 @@ impl Block {
 
     // 同步内存上的数据到块设备
     pub fn sync_blk_to_disk(&self, block_device: Arc<dyn BlockDevice>) {
+        // 这里需要做处理！！！
+        // 需要重新计算偏移量！！！
         block_device.write_block(self.disk_offset, &self.data);
+        todo!()
     }
 }
 
