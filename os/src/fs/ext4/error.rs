@@ -77,6 +77,13 @@ impl From<alloc::string::FromUtf8Error> for Ext4Error {
     }
 }
 
+// // xein add this maybe wrong
+// impl From<isize> for Ext4Error {
+//     fn from(err: isize) -> Self {
+//         Ext4Error::new(Errno)
+//     }
+// }
+
 #[macro_export]
 macro_rules! return_errno {
     ($errno: expr) => {
@@ -87,10 +94,13 @@ macro_rules! return_errno {
 // #[macro_export]
 // macro_rules! return_errno_with_message {
 //     ($errno: expr, $message: expr) => {
-//         return Err(Ext4Error::with_message($errno, $message))
+//         return Err($crate::fs::ext4::error::Ext4Error::with_message(
+//             $errno, $message,
+//         ))
 //     };
 // }
+
 // 普通函数实现
 pub fn return_errno_with_message(errno: Errno, message: &'static str) -> Result<(), Ext4Error> {
-    Err(Ext4Error::with_message(errno, message))
+    return Err(Ext4Error::with_message(errno, message));
 }

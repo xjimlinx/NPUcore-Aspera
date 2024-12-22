@@ -278,7 +278,20 @@ pub struct Block {
 }
 
 impl Block {
-    // 从块设备读取块
+    /// 使用块号加载一个块
+    pub fn load_id(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
+        let mut buf = [0u8; BLOCK_SIZE];
+        block_device.read_block(block_id, &mut buf);
+        let data = buf.to_vec();
+        Block {
+            disk_offset: block_id * BLOCK_SIZE,
+            data,
+        }
+    }
+    /// 使用偏移量加载一个块
+    /// # 说明
+    /// + 通过 offset/BLOCK_SIZE 获取 block_id 也即块号
+    /// + 然后调用load_id
     pub fn load_offset(block_device: Arc<dyn BlockDevice>, offset: usize) -> Self {
         // let mut buf = [0u8; BLOCK_SIZE];
         // block_device.read_block(offset, &mut buf);
@@ -288,17 +301,17 @@ impl Block {
         //     data,
         // }
         let block_id = offset / BLOCK_SIZE;
-        Self::load(block_device, block_id)
+        Self::load_id(block_device, block_id)
     }
-    pub fn load(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
-        let mut buf = [0u8; BLOCK_SIZE];
-        block_device.read_block(block_id, &mut buf);
-        let data = buf.to_vec();
-        Block {
-            disk_offset: block_id * BLOCK_SIZE,
-            data,
-        }
-    }
+    // pub fn load(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
+    //     let mut buf = [0u8; BLOCK_SIZE];
+    //     block_device.read_block(block_id, &mut buf);
+    //     let data = buf.to_vec();
+    //     Block {
+    //         disk_offset: block_id * BLOCK_SIZE,
+    //         data,
+    //     }
+    // }
     // 从inode块读取块
     pub fn load_inode_root_block(data: &[u32; 15]) -> Self {
         let data_bytes: &[u8; 60] = unsafe { core::mem::transmute(data) };

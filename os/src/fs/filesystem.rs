@@ -1,4 +1,5 @@
 use crate::fs::ext4::ext4fs::Ext4FileSystem;
+use crate::fs::ext4::BLOCK_SIZE;
 use crate::fs::fat32::EasyFileSystem;
 use crate::fs::vfs::VFS;
 use alloc::sync::Arc;
@@ -56,7 +57,7 @@ pub fn pre_mount() -> FS_Type {
     // 否则尝试获取超级块的魔数，如果是0xEF53，返回FS_Type::Ext4
     // 否则返回FS_Type::Null
     let block_device = BLOCK_DEVICE.clone();
-    let mut buf = [0u8; 2048];
+    let mut buf = [0u8; BLOCK_SIZE];
     block_device.read_block(0, &mut buf);
     // 判断第512个字节是不是0x55AA
     if buf[510] == 0x55 && buf[511] == 0xAA {
