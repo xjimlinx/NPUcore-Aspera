@@ -140,7 +140,7 @@ log从低到高等级分为`trace`, `debug`, `info`, `warning`, `error`
 + [Docs/Rust学习笔记](Docs/Rust.md)：NPUcore-LA Rust的学习笔记
 + [Docs/Makefile小记](Docs/Makefile 小记.md)：关于Makefile编写的语法笔记，内容较少
 + [Docs/实践笔记](Docs/实践笔记.md)：记录开始真正着手修改NPUcore-LA以适配ext4文件系统的思路和操作过程，由于并不是同时写文档和代码的，所以可能和实际操作会有略微出入，不一定能反映最新的代码修改、添加，但是可以反映整体思路
-+ [Docs/Linux文件系统与Ext4原理](Docs/Linux文件系统与Ext4原理)：Linux文件系统原理以及Ext4原理以及MBR、GPT的原理，还未写完
++ [Docs/Linux文件系统与Ext4原理](Docs/Linux文件系统与Ext4原理.md)：Linux文件系统原理以及Ext4原理以及MBR、GPT的原理，还未写完
 
 ## 附录、参考来源（主要参考来源）
 
