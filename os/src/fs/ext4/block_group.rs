@@ -69,7 +69,7 @@ impl Ext4BlockGroup {
 }
 
 impl Ext4BlockGroup {
-    /// Get the block number of the block bitmap for this block group.
+    /// 获取块组的块位图块号
     pub fn get_block_bitmap_block(&self, s: &Ext4Superblock) -> u64 {
         let mut v = self.block_bitmap_lo as u64;
         let desc_size = s.desc_size;
@@ -79,7 +79,7 @@ impl Ext4BlockGroup {
         v
     }
 
-    /// Get the block number of the inode bitmap for this block group.
+    /// 获取块组的Inode节点位图块号
     pub fn get_inode_bitmap_block(&self, s: &Ext4Superblock) -> u64 {
         let mut v = self.inode_bitmap_lo as u64;
         let desc_size = s.desc_size;
@@ -89,7 +89,7 @@ impl Ext4BlockGroup {
         v
     }
 
-    /// Get the count of unused inodes in this block group.
+    /// 获取块组中未使用的Inode节点数
     pub fn get_itable_unused(&mut self, s: &Ext4Superblock) -> u32 {
         let mut v = self.itable_unused_lo as u32;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
@@ -98,7 +98,7 @@ impl Ext4BlockGroup {
         v
     }
 
-    /// Get the count of used directories in this block group.
+    /// 获取块组中使用的目录数
     pub fn get_used_dirs_count(&self, s: &Ext4Superblock) -> u32 {
         let mut v = self.used_dirs_count_lo as u32;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
@@ -107,7 +107,7 @@ impl Ext4BlockGroup {
         v
     }
 
-    /// Set the count of used directories in this block group.
+    /// 设置块组中使用的目录数
     pub fn set_used_dirs_count(&mut self, s: &Ext4Superblock, cnt: u32) {
         self.itable_unused_lo = (cnt & 0xffff) as u16;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
@@ -115,7 +115,7 @@ impl Ext4BlockGroup {
         }
     }
 
-    /// Set the count of unused inodes in this block group.
+    /// 设置块组中未使用的Inode节点数
     pub fn set_itable_unused(&mut self, s: &Ext4Superblock, cnt: u32) {
         self.itable_unused_lo = (cnt & 0xffff) as u16;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
@@ -123,7 +123,7 @@ impl Ext4BlockGroup {
         }
     }
 
-    /// Set the count of free inodes in this block group.
+    /// 设置块组中空闲的Inode节点数
     pub fn set_free_inodes_count(&mut self, s: &Ext4Superblock, cnt: u32) {
         self.free_inodes_count_lo = (cnt & 0xffff) as u16;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
@@ -131,12 +131,12 @@ impl Ext4BlockGroup {
         }
     }
 
-    /// Get the count of free inodes in this block group.
+    /// 获取块组中空闲的Inode节点数
     pub fn get_free_inodes_count(&self) -> u32 {
         ((self.free_inodes_count_hi as u64) << 32) as u32 | self.free_inodes_count_lo as u32
     }
 
-    /// Get the block number of the inode table for this block group.
+    /// 获取块组的Inode节点表块号
     pub fn get_inode_table_blk_num(&self) -> u32 {
         ((self.inode_table_first_block_hi as u64) << 32) as u32 | self.inode_table_first_block_lo
     }
@@ -144,7 +144,7 @@ impl Ext4BlockGroup {
 
 /// 同步块组到磁盘
 impl Ext4BlockGroup {
-    /// Calculate and return the checksum of the block group descriptor.
+    /// 计算并返回块组描述符的校验和。
     #[allow(unused)]
     pub fn get_block_group_checksum(&mut self, bgid: u32, super_block: &Ext4Superblock) -> u16 {
         let desc_size = super_block.desc_size();
@@ -181,19 +181,27 @@ impl Ext4BlockGroup {
         crc
     }
 
-    /// Synchronize the block group data to disk.
+    /// 将块组数据同步到磁盘。
+    /// # 参数
+    /// + `block_device`: 块设备对象
+    /// + `bgid`: 块组号
+    /// + `super_block`: 超级块
     pub fn sync_block_group_to_disk(
         &self,
         block_device: Arc<dyn BlockDevice>,
         bgid: usize,
         super_block: &Ext4Superblock,
     ) {
+        // 获取每块上组描述符的数量
         let dsc_cnt = BLOCK_SIZE / super_block.desc_size as usize;
         // let dsc_per_block = dsc_cnt;
+        // 获取块组描述符在第几个块
         let dsc_id = bgid / dsc_cnt;
         // let first_meta_bg = super_block.first_meta_bg;
         let first_data_block = super_block.first_data_block;
+        // 计算块组描述符在第几个块
         let block_id = first_data_block as usize + dsc_id + 1;
+        // 计算偏移量
         let offset = (bgid % dsc_cnt) * super_block.desc_size as usize;
 
         let data = unsafe {
@@ -205,13 +213,13 @@ impl Ext4BlockGroup {
         block_device.write_block(block_id * BLOCK_SIZE + offset, data);
     }
 
-    /// Set the checksum of the block group descriptor.
+    /// 设置块组描述符的校验和。
     pub fn set_block_group_checksum(&mut self, bgid: u32, super_block: &Ext4Superblock) {
         let csum = self.get_block_group_checksum(bgid, super_block);
         self.checksum = csum;
     }
 
-    /// Synchronize the block group data to disk with checksum.
+    /// 将块组数据与校验和同步到磁盘。
     pub fn sync_to_disk_with_csum(
         &mut self,
         block_device: Arc<dyn BlockDevice>,
