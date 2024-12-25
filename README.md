@@ -103,13 +103,18 @@ make all
 
 ### 2.0 写在之前
 
+`FS_MODE` 根文件系统镜像类型：
+
++ `fat32`：默认值
++ `ext4`
+
 > 因为编译的机器是7840HS，全部重新执行编译还是会比较慢，所以有如下的内容
 
 #### 2.0.1 只改动了**rootfs**镜像类型
 
 ```bash
 # xxx为指定的文件系统类型
-make remake-qemu-flash-img FS_MODE=xxx
+make remake-qemu-flash-img-without-user FS_MODE=xxx
 # 然后执行
 make runsimple
 ```
@@ -133,7 +138,12 @@ make run-inner
 
 #### 2.0.3 只改动用户程序
 
-因为实际上也是改动根文件系统，所以与 [2.0.1](####2.0.1 只改动了rootfs镜像类型) 相同
+```bash
+# xxx为指定的文件系统类型
+make remake-qemu-flash-img FS_MODE=xxx
+# 然后执行
+make runsimple
+```
 
 ### 2.1 用户程序编译
 
@@ -143,7 +153,9 @@ make run-inner
 
 ### 2.2 文件系统编译
 
-`make fat32`: 创建文件系统镜像， 但不写入qemu使用的nand.dat
+`FS_MODE` 默认为`fat32`，可选项为`ext4`
+
+`make fs-img`: 创建文件系统镜像， 但不写入qemu使用的nand.dat
 `make qemu-flash-fat-img`: 创建文件系统镜像， 且写入qemu使用的nand.dat
 
 若需要进行不同文件系统的测试，先进行：
