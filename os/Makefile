@@ -34,7 +34,7 @@ ifeq ($(MODE), debug)
 	LA_2k1000_DISABLE_EH_FRAME := -D EH_ENABLED
 endif
 
-IMG_DIR := ../easy-fs-fuse
+IMG_DIR := ../fs-img-dir
 IMG_NAME = rootfs-ubifs-ze.img
 IMG := ${IMG_DIR}/$(IMG_NAME)
 IMG_LN = $(shell readlink -f $(IMG_DIR))/$(IMG_NAME)
@@ -61,7 +61,7 @@ user: env
 
 fs-img:
 ifeq ($(BOARD),laqemu)
-	@sudo rm -rf ../easy-fs-fuse
+	@sudo rm -rf ../fs-img-dir
 	./buildfs.sh "$(IMG)" "laqemu" $(MODE) $(FS_MODE)
 else
 	./buildfs.sh "$(IMG)" 2k1000 $(MODE) $(FS_MODE)
@@ -100,7 +100,7 @@ else ifeq ($(BOARD), 2k1000)
 	@./run_script $(MINITERM_START_CMD) $(LA_2k1000_PORT_FREQ)
 endif
 
-all: build mv
+all: fs-img build mv
 mv:
 	mv $(KERNEL_BIN) ../kernel.bin
 
@@ -117,8 +117,8 @@ env: # switch-toolchain
 
 clean:
 	@cargo clean
-	-@sudo rm ../easy-fs-fuse/uImage
-	-@sudo rm ../easy-fs-fuse/rootfs-ubifs-ze.img
+	-@sudo rm ../fs-img-dir/uImage
+	-@sudo rm ../fs-img-dir/rootfs-ubifs-ze.img
 	-@cd ../user && make clean
 
 .PHONY: user update gdb new-gdb monitor .FORCE

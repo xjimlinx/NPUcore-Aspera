@@ -1,5 +1,5 @@
 SUDO=$(if [ $(whoami) = "root" ]; then echo -n ""; else echo -n "sudo"; fi)
-U_FS_DIR="../easy-fs-fuse"
+U_FS_DIR="../fs-img-dir"
 U_FS=$1
 BLK_SZ="512"
 TARGET=riscv64gc-unknown-none-elf
