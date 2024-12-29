@@ -1,7 +1,6 @@
 # cargo config
 os/Cargo.lock
 user/Cargo.lock
-os/src/linker.ld
 
 # vscode config
 .vscode/
