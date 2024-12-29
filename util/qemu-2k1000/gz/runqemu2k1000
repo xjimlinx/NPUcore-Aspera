@@ -7,7 +7,6 @@ QEMU="$SCRIPTPATH"/../tmp/qemu/bin/qemu-system-loongarch64
 TFTP_DIR="$SCRIPTPATH"/../../../fs-img-dir
 OS="$SCRIPTPATH"/nand.dat
 [ -e "$OS" ] || dd if=/dev/zero bs=1M count=$(((256*(2048+64)/2048)))|tr '\000' '\377' > "$OS"
-# HARDDISK="$SCRIPTPATH"/2kfs.img
 FS_IMG="$SCRIPTPATH"/rootfs-ubifs-ze.img
 
 DEBUG_GMAC_PHYAD=0 "$QEMU"\
@@ -22,4 +21,3 @@ DEBUG_GMAC_PHYAD=0 "$QEMU"\
          -smp threads=1 \
          -hda $FS_IMG \
          -s $@ 2>&1 \
-        #  -hda $HARDDISK
