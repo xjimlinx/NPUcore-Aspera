@@ -4,7 +4,7 @@ BIOS="$SCRIPTPATH"/u-boot-with-spl.bin
 ln -sf "$SCRIPTPATH"/../tmp/qemu /tmp
 truncate -s 1M $BIOS
 QEMU="$SCRIPTPATH"/../tmp/qemu/bin/qemu-system-loongarch64
-TFTP_DIR="$SCRIPTPATH"/../../../easy-fs-fuse
+TFTP_DIR="$SCRIPTPATH"/../../../fs-img-dir
 OS="$SCRIPTPATH"/nand.dat
 [ -e "$OS" ] || dd if=/dev/zero bs=1M count=$(((256*(2048+64)/2048)))|tr '\000' '\377' > "$OS"
 # HARDDISK="$SCRIPTPATH"/2kfs.img

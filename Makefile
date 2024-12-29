@@ -26,8 +26,8 @@ qemu-download:
 	rm -rf util/qemu-2k1000/tmp/qemu/README.md
 	rm -rf util/qemu-2k1000/tmp/qemu/include
 	rm -rf util/qemu-2k1000/tmp/qemu/var
-	mkdir -p easy-fs-fuse
-	sudo chmod 777 easy-fs-fuse/
+	mkdir -p fs-img-dir
+	sudo chmod 777 fs-img-dir/
 	chmod +x util/mkimage
 	chmod +x util/qemu-2k1000/gz/runqemu2k1000
 	chmod +x util/qemu-2k1000/tmp/qemu/bin/qemu-system-loongarch64
