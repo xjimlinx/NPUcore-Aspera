@@ -23,7 +23,10 @@ use alloc::vec::Vec;
 use core::mem::size_of;
 use log::{debug, error, info, trace, warn};
 use num_enum::FromPrimitive;
-
+use crate::arch::shutdown;
+pub fn sys_shutdown() -> isize {
+    shutdown()
+}
 pub fn sys_exit(exit_code: u32) -> ! {
     exit_current_and_run_next((exit_code & 0xff) << 8);
 }
@@ -310,6 +313,20 @@ pub fn sys_getpgid(pid: usize) -> isize {
         None => ESRCH,
     }
 }
+/// creates a new session if the calling process is not a process group leader.
+/// The calling process is the leader of the new session
+/// 当前进程脱离父进程，从父进程的子进程列表中移除当前进程，当前进程的父进程设置为空。
+pub fn sys_setsid() -> isize {
+    let task = current_task().unwrap();
+    if let Some(parent) = task.acquire_inner_lock().parent.as_ref().unwrap().upgrade() {
+        parent
+            .acquire_inner_lock()
+            .children
+            .retain(|x| x.tid != task.tid);
+    }
+    task.acquire_inner_lock().parent = None;
+    SUCCESS
+}
 
 // For user, tid is pid in kernel
 pub fn sys_gettid() -> isize {
@@ -477,15 +494,16 @@ pub fn sys_clone(
             Err(errno) => return errno,
         };
     }
-    if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
-        match translated_refmut(child.get_user_token(), ctid) {
-            Ok(word) => *word = child.pid.0 as u32,
-            Err(errno) => return errno,
-        };
-    }
-    if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) {
-        child.acquire_inner_lock().clear_child_tid = ctid as usize;
-    }
+    // todo: CLONE_CHILD_SETTID标志被设置，但是ctid指针为零，会出现地址错误，干脆全注释掉
+    // if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
+    //     match translated_refmut(child.get_user_token(), ctid) {
+    //         Ok(word) => *word = child.pid.0 as u32,
+    //         Err(errno) => return errno,
+    //     };
+    // }
+    // if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) {
+    //     child.acquire_inner_lock().clear_child_tid = ctid as usize;
+    // }
     // add new task to scheduler
     add_task(child);
     new_pid as isize

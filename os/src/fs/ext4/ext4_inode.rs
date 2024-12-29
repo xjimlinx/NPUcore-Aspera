@@ -1,7 +1,8 @@
 use core::cmp::min;
+use core::mem::size_of;
+use core::panic;
 
 use alloc::{sync::Arc, vec::Vec};
-
 use crate::fs::{inode::InodeTrait, vfs::VFS};
 
 use super::*;
@@ -82,11 +83,14 @@ pub struct Linux2 {
     pub l_i_reserved: u16,      // 保留字段
 }
 
+#[allow(unused)]
 impl Ext4Inode {
     pub fn root_inode(ext4fs: &Arc<dyn VFS>) -> Arc<Self> {
         let ext4fs = Arc::downcast::<Ext4FileSystem>(ext4fs.clone()).unwrap();
-        todo!()
         // 尝试获取根目录的Inode节点
+        let root_inode = ext4fs.get_inode_ref(ROOT_INODE);
+        // root_inode.inode.clone()
+        todo!()
     }
 
     pub fn mode(&self) -> u16 {
@@ -482,12 +486,35 @@ impl Ext4Inode {
 
     pub fn sync_inode_to_disk(&self, block_device: Arc<dyn BlockDevice>, inode_pos: usize) {
         let data = unsafe {
-            core::slice::from_raw_parts(
-                self as *const _ as *const u8,
-                core::intrinsics::size_of::<Ext4Inode>(),
-            )
+            core::slice::from_raw_parts(self as *const _ as *const u8, size_of::<Ext4Inode>())
         };
-        block_device.write_block(inode_pos, data);
+        println!("data is {:?}", data);
+        // 因为写入的是inode的大小，不大可能越界。
+        // 所以先读取一个块，再覆写，再写入
+        println!("[kernel sync to disk] Ext4Inode is {:#?}", self);
+        println!("[kernel] data len is {} inode_pos is {}",data.len(), inode_pos);
+        // 计算要写入的块号
+        let block_id = inode_pos / BLOCK_SIZE;
+        println!("[kernel] block_id is {}", block_id);
+        // 计算在一个块上的偏移量
+        let offset = inode_pos % BLOCK_SIZE;
+        println!("[kernel] offset is {}", offset);
+        let mut buf = [0u8; BLOCK_SIZE];
+        // 读取一个块
+        block_device.read_block(block_id, &mut buf);
+        // 偏移量加上数据长度不能超过块大小
+        if offset + data.len() > BLOCK_SIZE {
+            panic!("[kernel fs error] over border");
+        }
+        // 这里有问题？
+        buf[offset..offset + data.len()].copy_from_slice(&data);
+        block_device.write_block(block_id, &buf);
+        let temp_test_buf = buf.clone();
+        // println!("[kernel sync_inode_to_disk] write buf is {:?}", buf);
+        block_device.read_block(block_id, &mut buf);
+        // println!("[kernel sync_inode_to_disk] read buf is {:?}", buf);
+        assert!(temp_test_buf==buf);
+        println!("[kernel] temporary used, should be removed");
     }
 }
 
@@ -506,7 +533,20 @@ impl InodeTrait for Ext4Inode {
     }
 
     fn get_file_type(&self) -> crate::fs::DiskInodeType {
-        todo!()
+        // todo!()
+        let file_type = self.file_type();
+        println!("[kernel ext4inode file type] current inode is {:?}", self);
+        println!("[kernel ext4inode file type] file type is {:#?}", file_type);
+        match file_type {
+            InodeFileType::S_IFDIR => crate::fs::DiskInodeType::Directory,
+            InodeFileType::S_IFREG => crate::fs::DiskInodeType::File,
+            InodeFileType::S_IFBLK => crate::fs::DiskInodeType::Block,
+            InodeFileType::S_IFCHR => crate::fs::DiskInodeType::Character,
+            InodeFileType::S_IFIFO => crate::fs::DiskInodeType::FIFO,
+            InodeFileType::S_IFSOCK => crate::fs::DiskInodeType::Socket,
+            InodeFileType::S_IFLNK => crate::fs::DiskInodeType::Link,
+            _ => panic!("[kernel fs error] Unknown disk type"),
+        }
     }
 
     fn get_file_size(&self) -> u32 {
@@ -787,16 +827,34 @@ impl Ext4FileSystem {
     /// Load the inode reference from the disk.
     pub fn get_inode_ref(&self, inode_num: u32) -> Ext4InodeRef {
         let offset = self.inode_disk_pos(inode_num);
+        println!("[kernel get_inode_ref] offset is {:?}", offset);
 
         // The problem is happened here
         let mut ext4block = Block::load_offset(self.block_device.clone(), offset);
 
+        let blk_offset = offset % BLOCK_SIZE;
+        println!("[kernel get_inode_ref] blk_offset is {:?}", blk_offset);
         let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
 
         Ext4InodeRef {
             inode_num: inode_num,
             inode: *inode,
         }
+    }
+
+    /// Load the inode reference from the disk.
+    pub fn get_inode_ref_arc(&self, inode_num: u32) -> Arc<Ext4InodeRef> {
+        let offset = self.inode_disk_pos(inode_num);
+
+        // The problem is happened here
+        let mut ext4block = Block::load_offset(self.block_device.clone(), offset);
+
+        let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
+        Arc::new(
+        Ext4InodeRef {
+            inode_num: inode_num,
+            inode: *inode,
+        })
     }
 
     /// write back inode with checksum
@@ -815,6 +873,7 @@ impl Ext4FileSystem {
     /// write back inode with checksum
     pub fn write_back_inode_without_csum(&self, inode_ref: &Ext4InodeRef) {
         let inode_pos = self.inode_disk_pos(inode_ref.inode_num);
+        println!("[kernel write_back_inode_without_csum] inode_pos: {:?}, inode_num: {}", inode_pos, inode_ref.inode_num);
 
         inode_ref
             .inode
@@ -851,7 +910,7 @@ impl Ext4FileSystem {
 
     /// Allocate a new block
     pub fn allocate_new_block(&self, inode_ref: &mut Ext4InodeRef) -> Result<Ext4Fsblk, isize> {
-        let mut super_block = self.superblock;
+        let super_block = self.superblock;
         let inodes_per_group = super_block.inodes_per_group();
         let bgid = (inode_ref.inode_num - 1) / inodes_per_group;
         let index = (inode_ref.inode_num - 1) % inodes_per_group;
@@ -872,6 +931,7 @@ impl Ext4FileSystem {
         ext4_bmap_bit_set(&mut data, rel_blk_idx);
 
         block_group.set_block_group_balloc_bitmap_csum(&super_block, &data);
+        todo!();
         self.block_device
             .write_block(block_bitmap_block as usize, &data);
 
@@ -962,15 +1022,14 @@ impl Ext4FileSystem {
         Ok(new_block)
     }
 
-    /// Allocate a new inode
+    /// 分配一个新inode
+    /// # 参数
+    /// + inode_mode: u16 - inode 文件类型和权限
     ///
-    /// Params:
-    /// inode_mode: u16 - inode mode
-    ///
-    /// Returns:
-    /// `Result<u32>` - inode number
+    /// # 返回值
+    /// + `Result<u32>` - inode 号
     pub fn alloc_inode(&self, is_dir: bool) -> Result<u32, isize> {
-        // Allocate inode
+        // 分配inode号
         let inode_num = self.ialloc_alloc_inode(is_dir)?;
 
         Ok(inode_num)

@@ -1,8 +1,7 @@
 use crate::{
-    fs::{file_trait::File, DiskInodeType},
+    fs::{dirent::Dirent, file_trait::File, DiskInodeType},
     syscall::errno::{ENOTDIR, SUCCESS},
 };
-use crate::fs::dirent::Dirent;
 
 pub struct Hwclock;
 

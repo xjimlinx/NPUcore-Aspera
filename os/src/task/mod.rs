@@ -16,7 +16,7 @@ use alloc::{collections::VecDeque, sync::Arc};
 pub use context::TaskContext;
 pub use elf::{load_elf_interp, AuxvEntry, AuxvType, ELFInfo};
 use lazy_static::*;
-// use log::debug;
+use log::warn;
 use manager::fetch_task;
 pub use manager::{
     add_task, do_oom, do_wake_expired, find_task_by_pid, find_task_by_tgid, procs_count,
@@ -33,6 +33,7 @@ pub use signal::*;
 pub use task::{RobustList, Rusage, TaskControlBlock, TaskStatus};
 
 use self::processor::PROCESSOR;
+#[allow(unused)]
 pub fn try_yield() {
     let lock = PROCESSOR.lock();
     let mut do_suspend = false;
@@ -84,16 +85,20 @@ pub fn do_exit(task: Arc<TaskControlBlock>, exit_code: u32) {
     // **** hold current PCB lock
     let mut inner = task.acquire_inner_lock();
     if !task.exit_signal.is_empty() {
-        let parent_task = inner.parent.as_ref().unwrap().upgrade().unwrap(); // this will acquire inner of current task
-        let mut parent_inner = parent_task.acquire_inner_lock();
-        parent_inner.add_signal(task.exit_signal);
-
-        if parent_inner.task_status == TaskStatus::Interruptible {
-            // wake up parent if parent is waiting.
-            parent_inner.task_status = TaskStatus::Ready;
-            drop(parent_inner);
-            // push back to ready queue.
-            wake_interruptible(parent_task);
+        if let Some(parent) = inner.parent.as_ref(){
+            let parent_task = parent.upgrade().unwrap(); // this will acquire inner of current task
+            let mut parent_inner = parent_task.acquire_inner_lock();
+            parent_inner.add_signal(task.exit_signal);
+    
+            if parent_inner.task_status == TaskStatus::Interruptible {
+                // wake up parent if parent is waiting.
+                parent_inner.task_status = TaskStatus::Ready;
+                drop(parent_inner);
+                // push back to ready queue.
+                wake_interruptible(parent_task);
+            }
+        } else {
+            warn!("[do_exit] parent is None");
         }
     }
     log::trace!(

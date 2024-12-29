@@ -1,27 +1,24 @@
 use crate::{
     mm::try_get_from_user, syscall::errno::EFAULT, task::signal::Signals, timer::TimeSpec,
 };
+use alloc::vec::Vec;
+use core::ptr::null_mut;
+
 use crate::{
     mm::{copy_from_user_array, copy_to_user_array},
     task::{current_task, sigprocmask, suspend_current_and_run_next, SigMaskHow},
 };
-use alloc::vec::Vec;
-use core::ptr::null_mut;
 
 ///  A scheduling  scheme  whereby  the  local  process  periodically  checks  until  the  pre-specified events (for example, read, write) have occurred.
-/// 一种调度方案，通过该方案，本地进程定期检查，直到预先指定的事件（例如读、写）发生为止。
 /// The PollFd struct in 32-bit style.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PollFd {
     /// File descriptor
-    /// 文件描述符
     fd: u32,
     /// Requested events
-    /// 请求的事件
     events: PollEvent,
     /// Returned events
-    /// 返回的事件
     revents: PollEvent,
 }
 
@@ -214,22 +211,17 @@ impl FdSet {
     fn fd_elt(d: usize) -> usize {
         d >> 6
     }
-
-    /// 取低6位，即取模64，然后 1 左移这个数，得到一个 u64 类型的位
+    /// Mod `d` by 64 for the position of `d` in the `fd_elt()` bitmap.
     fn fd_mask(d: usize) -> u64 {
         1 << (d & 0x3F)
     }
-
     /// Clear the current struct.
-    /// 将所有的位都清零
     pub fn clr_all(&mut self) {
         for i in 0..16 {
             self.bits[i] = 0;
         }
     }
-
     /// Collect all fds with their bits set.
-    /// 遍历所有的位，将被设置的位的索引放入一个Vec中
     pub fn get_fd_vec(&self) -> Vec<usize> {
         let mut v = Vec::new();
         for i in 0..1024 {
@@ -239,9 +231,7 @@ impl FdSet {
         }
         v
     }
-
     /// The total number of set bits.
-    /// 计算所有被设置的位的个数
     pub fn set_num(&self) -> u32 {
         let mut sum: u32 = 0;
         for i in self.bits.iter() {
@@ -249,21 +239,14 @@ impl FdSet {
         }
         sum
     }
-
-    /// 将文件描述符 d 对应的位设置为 1
-    /// 表示该文件描述符已经被设置
     pub fn set(&mut self, d: usize) {
         self.bits[Self::fd_elt(d)] |= Self::fd_mask(d);
     }
-
     /// Clear a certain bit `d` to stop waiting for the event of the correspond fd.
-    /// 将文件描述符 d 对应的位设置为 0
     pub fn clr(&mut self, d: usize) {
         self.bits[Self::fd_elt(d)] &= !Self::fd_mask(d);
     }
-
     /// Predicate for whether the bit is set for the `d`
-    /// 判断文件描述符 d 对应的位是否被设置
     pub fn is_set(&self, d: usize) -> bool {
         (Self::fd_mask(d) & self.bits[Self::fd_elt(d)]) != 0
     }

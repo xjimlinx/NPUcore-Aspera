@@ -4,7 +4,7 @@ use super::{PhysAddr, PhysPageNum};
 use crate::config::MEMORY_END;
 #[cfg(feature = "oom_handler")]
 use crate::task::current_task;
-// KISS
+
 use alloc::{sync::Arc, vec::Vec};
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
@@ -13,7 +13,7 @@ use spin::RwLock;
 pub struct FrameTracker {
     pub ppn: PhysPageNum,
 }
-/// RAII phantom for physical pages
+
 impl FrameTracker {
     pub fn new(ppn: PhysPageNum) -> Self {
         // page cleaning
@@ -55,15 +55,21 @@ pub struct StackFrameAllocator {
 }
 
 impl StackFrameAllocator {
-    pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
-        self.current = l.0;
+	pub fn clear(&mut self, l: PhysPageNum, r: PhysPageNum) {
+		self.current = l.0;
         self.end = r.0;
+	}
+    pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
+        self.clear(l,r);
         let last_frames = self.end - self.current;
         self.recycled.reserve(last_frames);
         println!("last {} Physical Frames.", last_frames);
     }
+	pub fn cal(&self) -> usize {
+		self.end - self.current + self.recycled.len()
+	}
     pub fn unallocated_frames(&self) -> usize {
-        self.recycled.len() + self.end - self.current
+        self.cal()
     }
 }
 impl FrameAllocator for StackFrameAllocator {
@@ -95,7 +101,7 @@ impl FrameAllocator for StackFrameAllocator {
     unsafe fn alloc_uninit(&mut self) -> Option<FrameTracker> {
         if let Some(ppn) = self.recycled.pop() {
             let frame_tracker = FrameTracker::new_uninit(ppn.into());
-            log::trace!("[frame_alloc_uninit] {:?}", frame_tracker);
+            //log::trace!("[frame_alloc_uninit] {:?}", frame_tracker);
             Some(frame_tracker)
         } else if self.current == self.end {
             None
@@ -236,47 +242,10 @@ pub fn unallocated_frames() -> usize {
     FRAME_ALLOCATOR.write().unallocated_frames()
 }
 
-#[allow(unused)]
-pub fn frame_allocator_test() {
-    let mut v: Vec<Arc<FrameTracker>> = Vec::new();
-    for i in 0..5 {
-        let frame = frame_alloc().unwrap();
-        println!("{:?}", frame);
-        v.push(frame);
-    }
-    v.clear();
-    for i in 0..5 {
-        let frame = frame_alloc().unwrap();
-        println!("{:?}", frame);
-        v.push(frame);
-    }
-    drop(v);
-    println!("frame_allocator_test passed!");
-}
+
 
 #[macro_export]
-/// # Usage Example
-///
-/// `show_frame_consumption!{$place, $before}` Format:
-///
-/// ````
-/// show_frame_consumption!("push_elf_area", previous_use)
-/// ````
-///
-/// `show_frame_consumption!{$place, $statement}` Format:
-///
-/// ````
-/// show_frame_consumption! {
-///        "push_elf_area";
-///        if crate::mm::push_elf_area(file.clone()).is_err() {
-///            file.kread(None, buffer);
-///        } else {
-///            info!("[elf_exec] Hit ELF cache, no alloc");
-///        };
-///    }
-/// ````
-///
-/// # Arguments
+
 /// * `$place`: the name tag for the promotion.
 /// * `statement`: the enclosed
 /// * `before`:

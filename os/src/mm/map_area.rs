@@ -60,6 +60,10 @@ impl Frame {
             _ => None,
         }
     }
+	pub fn gen_id(&mut self,frame_ref:&mut Arc<FrameTracker>) -> usize {
+		let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
+        swap_tracker.0
+	}
     #[cfg(feature = "oom_handler")]
     pub fn swap_out(&mut self) -> Result<usize, MemoryError> {
         match self {
@@ -67,6 +71,7 @@ impl Frame {
                 if Arc::strong_count(frame_ref) == 1 {
                     let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
                     let swap_id = swap_tracker.0;
+					
                     // frame_tracker should be dropped
                     *self = Frame::SwappedOut(swap_tracker);
                     Ok(swap_id)
@@ -85,7 +90,8 @@ impl Frame {
         match self {
             Frame::InMemory(frame_ref) => {
                 let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
-                let swap_id = swap_tracker.0;
+                //let swap_id = self.gen_id();
+				let swap_id = swap_tracker.0;
                 // frame_tracker should be dropped
                 *self = Frame::SwappedOut(swap_tracker);
                 Ok(swap_id)
@@ -178,6 +184,25 @@ impl Debug for LinearMap {
     }
 }
 impl LinearMap {
+	pub fn gen_dict(&self,vpn_range : VPNRange) -> LinearMap {
+		let new_dict = Self {
+            vpn_range,
+            frames: Vec::with_capacity(vpn_range.get_end().0 - vpn_range.get_start().0),
+            #[cfg(feature = "oom_handler")]
+            active: VecDeque::new(),
+            #[cfg(feature = "oom_handler")]
+            compressed: 0,
+            #[cfg(feature = "oom_handler")]
+            swapped: 0,
+        };
+		new_dict
+	}
+	pub fn get_start(&self) -> VirtPageNum {
+		self.vpn_range.get_start()
+	}
+	pub fn get_end(&self) -> VirtPageNum {
+		self.vpn_range.get_end()
+	}
     pub fn new(vpn_range: VPNRange) -> Self {
         let len = vpn_range.get_end().0 - vpn_range.get_start().0;
         let mut new_dict = Self {
@@ -452,31 +477,7 @@ impl MapArea {
             map_file: None,
         }
     }
-    #[cfg(not(feature = "oom_handler"))]
-    pub fn from_existing_frame(
-        start_va: VirtAddr,
-        map_type: MapType,
-        map_perm: MapPermission,
-        frames: Vec<Frame>,
-    ) -> Self {
-        let start_vpn = start_va.floor();
-        let end_vpn = VirtPageNum::from(start_vpn.0 + frames.len());
-        Self {
-            inner: LinearMap {
-                vpn_range: VPNRange::new(start_vpn, end_vpn),
-                frames,
-            },
-            map_type,
-            map_perm,
-            map_file: None,
-        }
-    }
-    /// Map an included page in current area.
-    /// If the `map_type` is `Framed`, then physical pages shall be allocated by this function.
-    /// Otherwise, where `map_type` is `Identical`,
-    /// the virtual page will be mapped directly to the physical page with an identical address to the page.
-    /// # Note
-    /// Vpn should be in this map area, but the check is not enforced in this function!
+    
     pub fn map_one<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -543,13 +544,7 @@ impl MapArea {
         }
         Ok(())
     }
-    /// Map the same area in `self` from `src_page_table` to `dst_page_table`, sharing the same physical address.
-    /// Convert map areas to physical pages.
-    /// # Of Course...
-    /// Since the area is shared, the pages have been allocated.
-    /// # Argument
-    /// `dst_page_table`: The destination to be mapped into.
-    /// `src_page_table`: The source to be mapped from. This is also the page table where `self` should be included.
+    
     pub fn map_from_existing_page_table<T: PageTable>(
         &mut self,
         dst_page_table: &mut T,
@@ -567,17 +562,19 @@ impl MapArea {
         }
         Ok(())
     }
+	pub fn get_inner(&self) -> &LinearMap {
+		&self.inner
+	}
     pub fn get_start<T: PageTable>(&self) -> VirtPageNum {
-        self.inner.vpn_range.get_start()
+        self.get_inner().vpn_range.get_start()
     }
     pub fn get_end<T: PageTable>(&self) -> VirtPageNum {
-        self.inner.vpn_range.get_end()
+        self.get_inner().vpn_range.get_end()
     }
 
-    /// Map vpns in `self` to the same ppns in `kernel_area` from `start_vpn_in_kernel_area`,
-    /// range is depend on `self.vpn_range`.
-    /// `page_table` and `self` should belong to the same `memory_set`.
-    /// `vpn_range` in `kernel_area` should be broader than (or at least equal to) `self`.
+    pub fn get_lock(&self) -> &LinearMap {
+		&self.inner
+	}
     pub fn map_from_kernel_area<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -588,7 +585,7 @@ impl MapArea {
             .get_area_by_vpn_range(start_vpn_in_kernel_area)
             .unwrap();
         let mut src_vpn = start_vpn_in_kernel_area;
-        for vpn in self.inner.vpn_range {
+        for vpn in self.get_inner().vpn_range {
             if let Some(frame) = kernel_area.inner.get_in_memory(&src_vpn) {
                 let ppn = frame.ppn;
                 if !page_table.is_mapped(vpn) {
@@ -629,13 +626,11 @@ impl MapArea {
     ) -> Result<PhysPageNum, MemoryError> {
         let old_frame = self.inner.remove_in_memory(&vpn).unwrap();
         if Arc::strong_count(&old_frame) == 1 {
-            // don't need to copy
-            // push back old frame and set pte flags to allow write
+            
             let old_ppn = old_frame.ppn;
             self.inner.alloc_in_memory(vpn, old_frame);
             page_table.set_pte_flags(vpn, self.map_perm).unwrap();
-            // Starting from this, the write (page) fault will not be triggered in this space,
-            // for the pte permission now contains Write.
+           
             trace!("[copy_on_write] no copy occurred");
             Ok(old_ppn)
         } else {
@@ -739,8 +734,8 @@ impl MapArea {
         start_vpn: VirtPageNum,
         end_vpn: VirtPageNum,
     ) -> Option<(VirtPageNum, VirtPageNum)> {
-        let area_start_vpn = self.inner.vpn_range.get_start();
-        let area_end_vpn = self.inner.vpn_range.get_end();
+        let area_start_vpn = self.get_inner().vpn_range.get_start();
+        let area_end_vpn = self.get_inner().vpn_range.get_end();
         if end_vpn < area_start_vpn || start_vpn >= area_end_vpn {
             return None;
         } else {
@@ -807,9 +802,9 @@ impl MapArea {
     }
     #[cfg(feature = "oom_handler")]
     pub fn do_oom<T: PageTable>(&mut self, page_table: &mut T) -> usize {
-        let start_vpn = self.inner.vpn_range.get_start();
-        let compressed_before = self.inner.compressed;
-        let swapped_before = self.inner.swapped;
+        let start_vpn = self.get_inner().vpn_range.get_start();
+        let compressed_before = self.get_inner().compressed;
+        let swapped_before = self.get_inner().swapped;
         warn!("{:?}", self.inner.active);
         while let Some(idx) = self.inner.active.pop_front() {
             let frame = &mut self.inner.frames[idx as usize];
@@ -917,3 +912,26 @@ bitflags! {
         const MAP_FILE              =   0;
     }
 }
+
+// #[derive(Debug)]
+// pub struct VPNRange {
+// 	start: VirtPageNum,
+// 	end: VirtPageNum,
+// }
+// impl VPNRange {
+// 	pub fn get_start(&self) -> VirtPageNum {
+// 		self.start
+// 	}
+// 	pub fn get_end(&self) -> VirtPageNum {
+// 		self.end
+// 	}
+// 	pub fn new(start: VirtPageNum, end: VirtPageNum) -> Self {
+// 		Self { start, end }
+// 	}
+// 	pub fn len(&self) -> usize {
+// 		self.end.0 - self.start.0
+// 	}
+// 	pub fn contains(&self, vpn: VirtPageNum) -> bool {
+// 		vpn >= self.start && vpn < self.end
+// 	}
+// }

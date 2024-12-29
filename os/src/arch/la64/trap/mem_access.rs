@@ -1,5 +1,3 @@
-#[allow(unused)]
-use alloc::collections::btree_set::Intersection;
 use bit_field::BitField;
 use core::{convert::TryInto, fmt::Debug};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -37,6 +35,7 @@ impl Instruction {
                 .or_else(|_| (self.bits >> (32 - 17)).try_into())
         })
     }
+    #[allow(unused)]
     pub fn get_addr(
         &self,
         gp: &GeneralRegs,

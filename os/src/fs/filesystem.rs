@@ -1,7 +1,4 @@
-use crate::fs::ext4::ext4fs::Ext4FileSystem;
 use crate::fs::ext4::BLOCK_SIZE;
-use crate::fs::fat32::EasyFileSystem;
-use crate::fs::vfs::VFS;
 use alloc::sync::Arc;
 use core::ops::AddAssign;
 use lazy_static::*;
@@ -9,30 +6,15 @@ use spin::Mutex;
 
 use crate::drivers::BLOCK_DEVICE;
 
-use super::ext4::BlockCacheManager;
-use super::BlockDevice;
-
 #[allow(unused, non_camel_case_types)]
+#[derive(Debug)]
 pub enum FS_Type {
     Null,
     Fat32,
     Ext4,
 }
 
-// impl FS_Type {
-//     pub fn mount_fs(
-//         block_device: Arc<dyn BlockDevice>,
-//         index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
-//     ) -> Arc<dyn VFS> {
-//         let fs_type = pre_mount();
-//         match fs_type {
-//             FS_Type::Fat32 => EasyFileSystem::open(block_device, index_cache_mgr),
-//             FS_Type::Ext4 => Arc::new(Ext4FileSystem::open_ext4rs(block_device, index_cache_mgr)),
-//             FS_Type::Null => panic!("no filesystem found"),
-//         }
-//     }
-// }
-
+#[derive(Debug)]
 pub struct FileSystem {
     pub fs_id: usize,
     pub fs_type: FS_Type,

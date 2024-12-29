@@ -1,6 +1,5 @@
 use core::mem::size_of;
 
-
 const NAME_LIMIT: usize = 128;
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]

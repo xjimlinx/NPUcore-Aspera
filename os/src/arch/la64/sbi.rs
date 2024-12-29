@@ -6,6 +6,7 @@ use crate::drivers::Ns16550a;
 use core::{arch::asm, mem::MaybeUninit};
 
 use super::board::UART_BASE;
+use super::acpi::Pm1Cnt;
 
 pub static mut UART: Ns16550a = Ns16550a { base: UART_BASE };
 
@@ -31,6 +32,7 @@ pub fn console_getchar() -> usize {
 }
 
 pub fn shutdown() -> ! {
-    print!("[panic(\"shutdown\")] {:?}", super::register::CrMd::read());
+    let mut pm1_cnt: Pm1Cnt = Pm1Cnt::empty();
+    pm1_cnt.set_s5().write();
     loop {}
 }

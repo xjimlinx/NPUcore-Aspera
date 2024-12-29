@@ -1,4 +1,4 @@
-use crate::fs::DiskInodeType;
+use crate::fs::{dirent::Dirent, DiskInodeType};
 use alloc::sync::Arc;
 
 use crate::{
@@ -108,7 +108,7 @@ impl File for Zero {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::dirent::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<Dirent> {
         todo!()
     }
 

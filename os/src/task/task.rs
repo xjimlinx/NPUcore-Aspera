@@ -9,8 +9,10 @@ use super::{pid_alloc, KernelStackImpl, PidHandle};
 use crate::arch::TrapImpl;
 use crate::arch::{trap_handler, TrapContext};
 use crate::config::MMAP_BASE;
-use crate::fs::{FdTable, FileDescriptor, OpenFlags, ROOT_FD};
+use crate::fs::file_descriptor::FdTable;
+use crate::fs::{FileDescriptor, OpenFlags, ROOT_FD};
 use crate::mm::{MemorySet, PageTableImpl, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::net::SocketTable;
 use crate::syscall::CloneFlags;
 use crate::timer::{ITimerVal, TimeVal};
 use alloc::boxed::Box;
@@ -22,11 +24,7 @@ use log::trace;
 use spin::{Mutex, MutexGuard};
 
 #[derive(Clone)]
-// 文件系统状态
 pub struct FsStatus {
-    // working_inode 就是当前进程的工作目录
-    // 可以通过 os/src/syscall/fs.rs 中的 sys_chdir 系统调用来发现
-    // 每次调用 chdir 都会更新 working_inode
     pub working_inode: Arc<FileDescriptor>,
 }
 
@@ -43,11 +41,9 @@ pub struct TaskControlBlock {
     // shareable and mutable
     pub exe: Arc<Mutex<FileDescriptor>>,
     pub tid_allocator: Arc<Mutex<RecycleAllocator>>,
-    // 当前进程打开的文件（文件描述符表）
     pub files: Arc<Mutex<FdTable>>,
-    // 当前进程的文件系统状态
+    pub socket_table : Arc<Mutex<SocketTable>>,
     pub fs: Arc<Mutex<FsStatus>>,
-    // 虚拟页表
     pub vm: Arc<Mutex<MemorySet<PageTableImpl>>>,
     pub sighand: Arc<Mutex<Vec<Option<Box<SigAction>>>>>,
     pub futex: Arc<Mutex<Futex>>,
@@ -272,6 +268,11 @@ impl TaskControlBlock {
                 vec.resize(3, tty);
                 vec
             }))),
+            socket_table: Arc::new(
+                Mutex::new(
+                    SocketTable::new(
+
+            ))),
             fs: Arc::new(Mutex::new(FsStatus {
                 working_inode: Arc::new(
                     ROOT_FD
@@ -456,6 +457,7 @@ impl TaskControlBlock {
             } else {
                 Arc::new(Mutex::new(self.files.lock().clone()))
             },
+            socket_table: Arc::new(Mutex::new(SocketTable::from_another(&self.socket_table.clone().lock()).unwrap())),
             fs: if flags.contains(CloneFlags::CLONE_FS) {
                 self.fs.clone()
             } else {
@@ -552,7 +554,6 @@ impl TaskControlBlock {
         let inner = self.acquire_inner_lock();
         inner.pgid
     }
-    // 获取用户令牌
     pub fn get_user_token(&self) -> usize {
         self.vm.lock().token()
     }

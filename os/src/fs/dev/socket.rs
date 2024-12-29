@@ -1,12 +1,12 @@
 use alloc::sync::{Arc, Weak};
 
 use crate::{
-    fs::{file_trait::File, DiskInodeType},
+    fs::{dirent::Dirent, file_trait::File, DiskInodeType},
     syscall::errno::ENOTDIR,
 };
 
 struct Socket;
-
+#[allow(unused)]
 pub fn make_socket() -> Arc<dyn File> {
     Arc::new(Socket {})
 }
@@ -94,7 +94,7 @@ impl File for Socket {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::dirent::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<Dirent> {
         todo!()
     }
 

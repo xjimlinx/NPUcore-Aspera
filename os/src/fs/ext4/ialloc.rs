@@ -2,11 +2,16 @@ use crate::fs::ext4::{block_group::Ext4BlockGroup, BLOCK_SIZE};
 
 use super::{
     bitmap::{ext4_bmap_bit_clr, ext4_bmap_bit_find_clr, ext4_bmap_bit_set},
-    error::{return_errno_with_message, Errno},
+    error::Errno,
     ext4fs::Ext4FileSystem,
 };
 
 impl Ext4FileSystem {
+    /// 分配inode号
+    /// # 参数
+    /// + is_dir: 是否是文件夹
+    /// # 返回值
+    /// + 新的inode号
     pub fn ialloc_alloc_inode(&self, is_dir: bool) -> Result<u32, isize> {
         let mut bgid = 0;
         let bg_count = self.superblock.block_group_count();
@@ -18,6 +23,7 @@ impl Ext4FileSystem {
                 continue;
             }
 
+            // 获取块组
             let mut bg =
                 Ext4BlockGroup::load_new(self.block_device.clone(), &super_block, bgid as usize);
 
@@ -40,12 +46,13 @@ impl Ext4FileSystem {
                 ext4_bmap_bit_set(&mut bitmap_data, idx_in_bg);
 
                 // update bitmap in disk
+                // 此处因为是直接进行块单位的写入，所以不需要考虑对齐
                 self.block_device
                     .write_block(inode_bitmap_block as usize, &bitmap_data);
 
                 bg.set_block_group_ialloc_bitmap_csum(&super_block, &bitmap_data);
 
-                /* Modify filesystem counters */
+                // 修改文件系统计数器
                 free_inodes -= 1;
                 bg.set_free_inodes_count(&super_block, free_inodes);
 
@@ -55,7 +62,7 @@ impl Ext4FileSystem {
                     bg.set_used_dirs_count(&super_block, used_dirs);
                 }
 
-                /* Decrease unused inodes count */
+                // 减少未使用inode计数
                 let mut unused = bg.get_itable_unused(&super_block);
                 let free = inodes_in_bg - unused as u32;
                 if idx_in_bg >= free {
@@ -63,13 +70,18 @@ impl Ext4FileSystem {
                     bg.set_itable_unused(&super_block, unused);
                 }
 
+                // 同步块组内容
                 bg.sync_to_disk_with_csum(self.block_device.clone(), bgid as usize, &super_block);
 
-                /* Update superblock */
+                // 更新超级块
                 super_block.decrease_free_inodes_count();
                 super_block.sync_to_disk_with_csum(self.block_device.clone());
+                // 看是否写入成功
+                let mut test_super_block = [0u8; BLOCK_SIZE];
+                self.block_device.read_block(0, &mut test_super_block);
 
                 /* Compute the absolute i-nodex number */
+                // 计算inode号
                 let inodes_per_group = super_block.inodes_per_group();
                 let inode_num = bgid * inodes_per_group + (idx_in_bg + 1);
 
@@ -79,8 +91,7 @@ impl Ext4FileSystem {
             bgid += 1;
         }
 
-        // return_errno_with_message(Errno::ENOSPC, "alloc inode fail")
-        println!("[kernel ialloc] alloc inode faile");
+        println!("[kernel ialloc] alloc inode failed");
         return Err(Errno::ENOSPC as isize);
     }
 
@@ -105,6 +116,7 @@ impl Ext4FileSystem {
 
         // Set new checksum after modification
         // update bitmap in disk
+        // 此处与上面的ialloc_alloc_inode函数一样，不需要考虑对齐
         self.block_device
             .write_block(inode_bitmap_block as usize, &bitmap_data);
         bg.set_block_group_ialloc_bitmap_csum(&super_block, &bitmap_data);

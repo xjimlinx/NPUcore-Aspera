@@ -217,12 +217,21 @@ impl Ext4Superblock {
         self.free_blocks_count_hi = (free_blocks >> 32) as u32;
     }
 
+    /// 同步超级块到磁盘，不带校验值
     pub fn sync_to_disk(&self, block_device: Arc<dyn BlockDevice>) {
         let data = unsafe {
             core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
         };
-        block_device.write_block(SUPERBLOCK_OFFSET, data);
+        let superblk_id = SUPERBLOCK_OFFSET / BLOCK_SIZE;
+        let mut buf = [0u8; BLOCK_SIZE];
+        // 先读取第一个块
+        block_device.read_block(superblk_id, &mut buf);
+        // 然后更改的超级块写到对应的位置中（后1024个字节）
+        buf[1024..2048].copy_from_slice(data);
+        block_device.write_block(SUPERBLOCK_OFFSET, &buf);
     }
+
+    /// 同步超级块到磁盘，同时带有校验值
     pub fn sync_to_disk_with_csum(&mut self, block_device: Arc<dyn BlockDevice>) {
         let data = unsafe {
             core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
@@ -232,7 +241,13 @@ impl Ext4Superblock {
         let data = unsafe {
             core::slice::from_raw_parts(self as *const _ as *const u8, core::mem::size_of::<Self>())
         };
-        block_device.write_block(SUPERBLOCK_OFFSET, data);
+        let superblk_id = SUPERBLOCK_OFFSET / BLOCK_SIZE;
+        let mut buf = [0u8; BLOCK_SIZE];
+        // 先读取第一个块
+        block_device.read_block(superblk_id, &mut buf);
+        // 然后更改的超级块写到对应的位置中（后1024个字节）
+        buf[1024..2048].copy_from_slice(data);
+        block_device.write_block(SUPERBLOCK_OFFSET, &buf);
     }
 
     /// xein add this, maybe wrong

@@ -1,5 +1,6 @@
 use crate::arch::console_getchar;
 use crate::fs::directory_tree::DirectoryTreeNode;
+use crate::fs::dirent::Dirent;
 use crate::fs::file_trait::File;
 use crate::fs::layout::Stat;
 use crate::fs::DiskInodeType;
@@ -265,7 +266,7 @@ impl File for Teletype {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::dirent::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<Dirent> {
         todo!()
     }
 

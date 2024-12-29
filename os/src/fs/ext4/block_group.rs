@@ -1,9 +1,11 @@
+use core::panic;
+
 use super::{
     crc::{ext4_crc32c, EXT4_CRC32_INIT},
     superblock::Ext4Superblock,
     BlockDevice, EXT4_MAX_BLOCK_GROUP_DESCRIPTOR_SIZE, EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE,
 };
-use crate::lib::math::is_power_of;
+use crate::math::is_power_of;
 use alloc::{sync::Arc, vec::Vec};
 // use crate::arch::BLOCK_SZ;
 use super::BLOCK_SIZE;
@@ -39,6 +41,10 @@ pub struct Ext4BlockGroup {
 }
 impl Ext4BlockGroup {
     /// 从磁盘加载块组描述符
+    /// # 参数
+    /// + block_device: 块设备对象
+    /// + super_block: 超级块
+    /// + block_group_idx: 块组号/索引
     pub fn load_new(
         block_device: Arc<dyn BlockDevice>,
         super_block: &Ext4Superblock,
@@ -55,7 +61,7 @@ impl Ext4BlockGroup {
         // 计算所在块的块号
         // 加上1是因为第0块是超级块
         let block_id = first_data_block as usize + dsc_id + 1;
-        // 计算偏移量
+        // 计算块内偏移量
         // 计算公式为：
         // 块组中的偏移量 = (块组中的索引 % 每个块的块组描述符数量) * 块组描述符大小
         let offset = (block_group_idx % dsc_cnt) * super_block.desc_size as usize;
@@ -210,7 +216,24 @@ impl Ext4BlockGroup {
                 core::mem::size_of::<Ext4BlockGroup>(),
             )
         };
-        block_device.write_block(block_id * BLOCK_SIZE + offset, data);
+
+        // 确保数据不会超出块大小
+        if offset + data.len() >= BLOCK_SIZE {
+            panic!("Data exceeds block size");
+        }
+
+        // 因为是块组描述符，所以不会超过一个块
+        // 先获取要写入的块
+        let mut origin_block_data = [0u8; BLOCK_SIZE];
+        block_device.read_block(block_id, &mut origin_block_data);
+        // 然后按偏移量将数据覆写到读取的块数据
+        for i in offset..offset+data.len() {
+            origin_block_data[i] = data[i - offset];
+        }
+        // origin_block_data[offset..offset + data.len()].copy_from_slice(data);
+        // 最后写入块
+        block_device.write_block(block_id, &origin_block_data);
+        // block_device.write_block(block_id, buf);
     }
 
     /// 设置块组描述符的校验和。
@@ -226,7 +249,9 @@ impl Ext4BlockGroup {
         bgid: usize,
         super_block: &Ext4Superblock,
     ) {
+        // 设置校验和
         self.set_block_group_checksum(bgid as u32, super_block);
+        // 同步块组描述符到磁盘
         self.sync_block_group_to_disk(block_device, bgid, super_block)
     }
 
@@ -280,11 +305,15 @@ impl Ext4BlockGroup {
     }
 }
 
+/// 块
 pub struct Block {
+    // 在磁盘上的偏移量
     pub disk_offset: usize,
+    // 数据，大小为BLOCK_SIZE
     pub data: Vec<u8>,
 }
 
+#[allow(dead_code)]
 impl Block {
     /// 使用块号加载一个块
     pub fn load_id(block_device: Arc<dyn BlockDevice>, block_id: usize, offset: usize) -> Self {
@@ -311,15 +340,7 @@ impl Block {
         let block_id = offset / BLOCK_SIZE;
         Self::load_id(block_device, block_id, offset)
     }
-    // pub fn load(block_device: Arc<dyn BlockDevice>, block_id: usize) -> Self {
-    //     let mut buf = [0u8; BLOCK_SIZE];
-    //     block_device.read_block(block_id, &mut buf);
-    //     let data = buf.to_vec();
-    //     Block {
-    //         disk_offset: block_id * BLOCK_SIZE,
-    //         data,
-    //     }
-    // }
+
     // 从inode块读取块
     pub fn load_inode_root_block(data: &[u32; 15]) -> Self {
         let data_bytes: &[u8; 60] = unsafe { core::mem::transmute(data) };
@@ -365,10 +386,7 @@ impl Block {
         }
     }
 
-    // 将数据写入到块设备
-    // pub fn write_offset(&self, block_device: Arc<dyn BlockDevice>) {
-    //     block_device.write_block(self.disk_offset, &self.data);
-    // }
+    /// 将数据写入到块
     pub fn write_offset(&mut self, offset: usize, data: &[u8], len: usize) {
         let end = offset + len;
         if end <= self.data.len() {
@@ -380,11 +398,21 @@ impl Block {
     }
 
     // 同步内存上的数据到块设备
+    /// 考虑根据len找到最后一个块，读取最后一个块之后，再分批次写入
+    /// 同时也需要读取第一个块
     pub fn sync_blk_to_disk(&self, block_device: Arc<dyn BlockDevice>) {
-        // 这里需要做处理！！！
-        // 需要重新计算偏移量！！！
-        block_device.write_block(self.disk_offset, &self.data);
-        todo!()
+        if self.data.len() % BLOCK_SIZE != 0 {
+            panic!(
+                "[todo fix the write_offset function] write_length is not a multiple of BLOCK_SIZE"
+            )
+        }
+        if self.disk_offset % BLOCK_SIZE != 0 {
+            panic!(
+                "[todo fix the write_offset function] write_offset is not a multiple of BLOCK_SIZE"
+            )
+        }
+        let block_id = self.disk_offset / BLOCK_SIZE;
+        block_device.write_block(block_id, &self.data);
     }
 }
 

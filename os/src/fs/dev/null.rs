@@ -1,4 +1,4 @@
-use crate::fs::DiskInodeType;
+use crate::fs::{dirent::Dirent, DiskInodeType};
 use alloc::sync::Arc;
 
 use crate::{
@@ -106,7 +106,7 @@ impl File for Null {
         todo!()
     }
 
-    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<crate::fs::dirent::Dirent> {
+    fn get_dirent(&self, count: usize) -> alloc::vec::Vec<Dirent> {
         todo!()
     }
 
@@ -119,7 +119,7 @@ impl File for Null {
     }
 
     fn truncate_size(&self, new_size: usize) -> Result<(), isize> {
-        todo!()
+        Ok(())
     }
 
     fn set_timestamp(&self, ctime: Option<usize>, atime: Option<usize>, mtime: Option<usize>) {

@@ -28,8 +28,9 @@ impl Ext4FileContent {
     }
 }
 
-use core::{cmp::min, default};
+use core::cmp::min;
 
+#[allow(unused)]
 pub struct FileAttr {
     /// Inode number
     pub ino: u64,
@@ -91,6 +92,7 @@ impl Default for FileAttr {
     }
 }
 
+#[allow(unused)]
 impl FileAttr {
     pub fn from_inode_ref(inode_ref: &Ext4InodeRef) -> FileAttr {
         let inode_num = inode_ref.inode_num;
@@ -240,56 +242,101 @@ impl Ext4FileSystem {
         Ok(EOK)
     }
 
-    /// create a new inode and link it to the parent directory
+    /// 创建一个新inode并将其链接到其父目录
+    /// # 参数
+    /// + parent: u32 - 父目录的inode号
+    /// + name: &str - 新文件的名称
+    /// + mode: u16 - 文件模式
     ///
-    /// Params:
-    /// parent: u32 - inode number of the parent directory
-    /// name: &str - name of the new file
-    /// mode: u16 - file mode
-    ///
-    /// Returns:
+    /// # 返回值:
+    /// + `Result<Ext4InodeRef>` - 新文件的inode
     pub fn create(&self, parent: u32, name: &str, inode_mode: u16) -> Result<Ext4InodeRef, isize> {
+        // 获取父目录的inode
         let mut parent_inode_ref = self.get_inode_ref(parent);
 
-        // let mut child_inode_ref = self.create_inode(inode_mode)?;
+        // 创建一个新inode
+        println!(
+            "[kernel in ext4fs create] inode name: {} inode mode: {}",
+            name, inode_mode
+        );
         let init_child_ref = self.create_inode(inode_mode)?;
+        println!(
+            "[kernel in ext4fs create] init_child_ref is {:#?}",
+            &init_child_ref
+        );
 
+        // 写回inode
+        // TODO: 读和写的数据不一样
+        // 此步之后发生错误
         self.write_back_inode_without_csum(&init_child_ref);
-        // load new
+        // 加载新inode
+        // 会有offset
+        // 比较offset看看是不是出错了
         let mut child_inode_ref = self.get_inode_ref(init_child_ref.inode_num);
+        println!(
+            "[kernel in ext4fs create] child_inode_ref is {:#?}",
+            child_inode_ref
+        );
 
+        // 链接新 inode 到父目录
         self.link(&mut parent_inode_ref, &mut child_inode_ref, name)?;
 
+        // 写回父目录 inode
         self.write_back_inode(&mut parent_inode_ref);
+        // 写回新 inode
         self.write_back_inode(&mut child_inode_ref);
 
         Ok(child_inode_ref)
     }
 
+    /// 创建inode
+    /// # 参数
+    /// + inode_mode: inode类型
+    /// # 返回值
+    /// + 新inode
     pub fn create_inode(&self, inode_mode: u16) -> Result<Ext4InodeRef, isize> {
-        let inode_file_type = match InodeFileType::from_bits(inode_mode) {
+        // 匹配新inode的文件类型
+        let inode_file_type_bits = inode_mode & EXT4_INODE_MODE_TYPE_MASK;
+        println!(
+            "[kernel create_inode] inode_mode {:?}, {:?}",
+            inode_mode,
+            InodeFileType::from_bits(inode_file_type_bits)
+        );
+        let inode_file_type = match InodeFileType::from_bits(inode_file_type_bits) {
             Some(file_type) => file_type,
             None => InodeFileType::S_IFREG,
         };
+        println!("[kernel create_inode] {:?}", inode_file_type);
 
+        if inode_file_type == InodeFileType::S_IFDIR {
+            println!("[kernel] creating directory inode");
+        }
+
+        // 判断是否是文件夹
         let is_dir = inode_file_type == InodeFileType::S_IFDIR;
 
-        // allocate inode
+        // 分配inode
         let inode_num = self.alloc_inode(is_dir)?;
 
-        // initialize inode
+        // 初始化inode
         let mut inode = Ext4Inode::default();
 
-        // set mode
+        // 设置文件类型和权限
         inode.set_mode(inode_mode | 0o777);
 
         // set extra size
         let inode_size = self.superblock.inode_size();
+        println!("[kernel create_inode] inode size: {}", inode_size);
         let extra_size = self.superblock.extra_size();
+        println!("[kernel create_inode] extra size: {}", extra_size);
         if inode_size > EXT4_GOOD_OLD_INODE_SIZE {
             let extra_size = extra_size;
             inode.set_i_extra_isize(extra_size);
         }
+        println!(
+            "[kernel create_inode] inode extra isize: {}",
+            inode.i_extra_isize()
+        );
 
         // set extent
         inode.set_flags(EXT4_INODE_FLAG_EXTENTS as u32);

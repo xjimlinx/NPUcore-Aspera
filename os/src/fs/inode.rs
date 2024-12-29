@@ -4,7 +4,7 @@ use crate::fs::*;
 use crate::mm::UserBuffer;
 use crate::syscall::errno::*;
 use core::any::Any;
-use core::{any, panic};
+use core::panic;
 
 use crate::fs::fat32::fat_inode::Inode;
 use crate::fs::fat32::layout::FATDiskInodeType;
@@ -14,7 +14,6 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use dirent::Dirent;
 use downcast_rs::*;
-use ext4::Ext4Inode;
 use fat32::fat_inode::FileContent;
 use fat32::layout::FATShortDirEnt;
 use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
@@ -23,7 +22,6 @@ use vfs::VFSDirEnt;
 
 pub struct InodeLock;
 
-pub type InodeImpl = Inode;
 pub type FatInode = Inode;
 
 #[allow(unused)]
@@ -210,6 +208,7 @@ pub struct OSInode {
 }
 
 impl OSInode {
+    // 只在获取根目录时使用
     pub fn new(root_inode: Arc<dyn InodeTrait>) -> Arc<dyn File> {
         Arc::new(Self {
             readable: true,
@@ -261,13 +260,13 @@ impl File for OSInode {
     fn writable(&self) -> bool {
         self.writable
     }
-    /// If offset is not `None`, `kread()` will start reading file from `*offset`,
-    /// the `*offset` is adjusted to reflect the number of bytes written to the buffer,
-    /// and the file offset won't be modified.
-    /// Otherwise `kread()` will start reading file from file offset,
-    /// the file offset is adjusted to reflect the number of bytes written to the buffer.
-    /// # Warning
-    /// Buffer must be in kernel space
+    /// 如果 offset 不是 `None`，`kread()` 会从偏移位置开始读取文件
+    /// `*offset`会被调整以反映写入缓冲区的字节数
+    /// 并且文件偏移不会被修改
+    /// 否则 `kread()` 会开始从偏移位置开始读取文件，
+    /// 文件偏移会被调整以反映写入缓冲区的字节数
+    /// # 警告
+    /// + Buffer 必须在内核态
     fn read(&self, offset: Option<&mut usize>, buffer: &mut [u8]) -> usize {
         match offset {
             Some(offset) => {
@@ -433,8 +432,18 @@ impl File for OSInode {
             dirnode_ptr: self.dirnode_ptr.clone(),
         })
     }
+    /// 打开子文件
+    /// # 返回值
+    /// + 子文件数组
     fn open_subfile(&self) -> Result<Vec<(String, Arc<dyn File>)>, isize> {
+        // 获取实际Inode
         let inode_lock = self.inner.write();
+
+        // 子文件构造闭包
+        // 根据目录项 short_ent
+        // 和偏移量 offset
+        // 返回值
+        // + 一个File对象（OSInode）
         let get_dyn_file = |short_ent, offset| -> Arc<dyn File> {
             Arc::new(Self {
                 readable: true,
@@ -453,12 +462,21 @@ impl File for OSInode {
             .map(|(name, short_ent, offset)| (name.clone(), get_dyn_file(short_ent, *offset)))
             .collect())
     }
+
+    /// 创建文件
+    /// # 参数
+    /// + name：文件名
+    /// + file_type: 文件类型
+    /// # 返回值
+    /// + 文件对象
     fn create(&self, name: &str, file_type: DiskInodeType) -> Result<Arc<dyn File>, isize> {
         // 加锁
         let inode_lock = self.inner.write();
+        // 创建新文件
         let new_file =
             self.inner
                 .create_lock(&self.inner, &inode_lock, name.to_string(), file_type);
+        // 返回新的文件对象
         if let Ok(inner) = new_file {
             Ok(Arc::new(Self {
                 readable: true,
@@ -616,4 +634,9 @@ impl File for OSInode {
 pub enum DiskInodeType {
     File,
     Directory,
+    FIFO,
+    Character,
+    Block,
+    Socket,
+    Link,
 }

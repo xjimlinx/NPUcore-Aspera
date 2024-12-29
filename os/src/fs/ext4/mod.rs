@@ -35,9 +35,9 @@ pub const EXT4_INODE_MODE_FILE: usize = 0x8000;
 pub const EXT4_INODE_MODE_TYPE_MASK: u16 = 0xF000;
 /// 提取权限的掩码
 pub const EXT4_INODE_MODE_PERM_MASK: u16 = 0x0FFF;
-/// 需要修改为动态获取
-/// Inode块大小
-pub const EXT4_INODE_BLOCK_SIZE: usize = 256;
+/// 需要修改为动态获取? TODO: check
+/// Inode块大小?
+pub const EXT4_INODE_BLOCK_SIZE: usize = 512;
 /// 经典Inode大小
 pub const EXT4_GOOD_OLD_INODE_SIZE: u16 = 128;
 /// Inode扩展标志

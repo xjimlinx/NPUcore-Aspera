@@ -57,7 +57,7 @@ pub struct Inode {
     inode_lock: RwLock<InodeLock>,
     /// File Content
     file_content: RwLock<FileContent>,
-    /// File cache manager corresponding to this inode.
+    /// 与该Inode对应的文件缓存管理器
     file_cache_mgr: PageCacheManager,
     /// File type
     file_type: Mutex<DiskInodeType>,
@@ -711,13 +711,13 @@ impl Inode {
         (short_ent, long_ents)
     }
 
-    /// Create a file from directory entry.
-    /// # Arguments
+    /// 从一个目录项创建文件.
+    /// # 参数
     /// + `parent_dir`: the parent directory inode pointer
     /// + `ent`: the short entry as the source of information
     /// + `offset`: the offset of the short directory entry in the `parent_dir`
-    /// # Return Value
-    /// Pointer to Inode
+    /// # 返回值
+    /// 指向Inode的指针
     pub fn from_fat_ent(parent_dir: &Arc<Self>, ent: &FATShortDirEnt, offset: u32) -> Arc<Self> {
         Self::new(
             ent.get_first_clus(),
@@ -1354,21 +1354,32 @@ impl InodeTrait for Inode {
         true
     }
 
+    /// 获取所有子文件
+    /// # 参数
+    /// + inode_lock：inode锁
+    /// # 返回值
+    /// + 子文件信息向量
     fn get_all_files_lock(
         &self,
         inode_lock: &RwLockWriteGuard<InodeLock>,
     ) -> Vec<(String, FATShortDirEnt, u32)> {
+        // 存放子文件的向量
+        // 容量预设为8
         let mut vec = Vec::with_capacity(8);
+        // 创建目录迭代器
         let mut walker = self
             .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
             .walk();
         loop {
+            // 遍历目录项
             let ele = walker.next();
             match ele {
                 Some((name, short_ent)) => {
+                    // 跳过特殊目录项
                     if name == "." || name == ".." {
                         continue;
                     }
+                    // 存放目录项
                     vec.push((name, short_ent, walker.iter.get_offset().unwrap()))
                 }
                 None => break,
@@ -1439,20 +1450,20 @@ impl InodeTrait for Inode {
         Ok(())
     }
 
-    /// Create a file or a directory from the parent.
-    /// The parent directory will write the new file directory entries.
-    /// # Arguments
-    /// + `parent_dir`: the pointer to parent directory inode
-    /// + `parent_inode_lock`: the lock of parent's inode
-    /// + `name`: new file's name
-    /// + `file_type`: new file's file type
-    /// # Return Value
-    /// If successful, it will return the new file inode
-    /// Otherwise, it will return Error.
-    /// # Warning
-    /// This function will lock the `file_content` of the parent directory, may cause deadlock
-    /// The length of name should be less than 256(for ascii), otherwise the file system can not store.
-    /// Make sure there are no duplicate names in parent_dir.
+    /// 从父目录创建一个文件或目录
+    /// 父目录将写入新的文件目录项。
+    /// # 参数
+    /// + `parent_dir`: 指向父目录的指针
+    /// + `parent_inode_lock`: 父目录的锁
+    /// + `name`: 新文件的名字
+    /// + `file_type`: 新文件的文件类型
+    /// # 返回值
+    /// 如果成功，会返回新文件的inode
+    /// 否则，返回错误
+    /// # 警告
+    /// 这个函数会将父目录的`file_content`锁住，可能会导致死锁
+    /// 名字的长度应该小于256(ascii)，否则文件系统无法存储。
+    /// 确保父目录中没有重复的名字
     fn create_lock(
         &self,
         parent_dir: &Arc<dyn InodeTrait>,
@@ -1463,34 +1474,34 @@ impl InodeTrait for Inode {
     where
         Self: Sized,
     {
-        // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
+        // 将父Inode下转为具体的Inode类型
         let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        // 如果父Inode是普通文件或者名称长度大于256，返回错误
         if parent_dir.is_file() || name.len() >= 256 {
             Err(())
         } else {
             log::debug!(
                 "[create] par_inode: {:?}, name: {:?}, file_type: {:?}",
-                // parent_dir.get_inode_num_lock(&parent_dir.file_content.read()),
                 parent_dir_specific.get_inode_num_lock(&parent_dir_specific.file_content.read()),
                 &name,
                 file_type
             );
-            // If file_type is Directory, alloc first cluster
+            // 如果文件类型是目录，分配第一个簇
             let fst_clus = if file_type == DiskInodeType::Directory {
-                // let fst_clus = parent_dir
                 let fst_clus = parent_dir_specific
                     .fs
                     .fat
-                    // .alloc(&parent_dir.fs.block_device, 1, None);
                     .alloc(&parent_dir_specific.fs.block_device, 1, None);
+                // 如果分配到的第一个簇是空值，返回错误
                 if fst_clus.is_empty() {
                     return Err(());
                 }
                 fst_clus[0]
             } else {
+                // 常规文件，fst_clus = 0
                 0
             };
-            // Genrate directory entries
+            // 生成目录项
             let (short_ent, long_ents) =
                 // Self::gen_dir_ent(parent_dir, parent_inode_lock, &name, fst_clus, file_type);
                 Self::gen_dir_ent(&parent_dir_specific, parent_inode_lock, &name, fst_clus, file_type);

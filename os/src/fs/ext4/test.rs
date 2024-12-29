@@ -1,6 +1,5 @@
 use alloc::{
-    format,
-    string::{String, ToString},
+    string::String,
     vec,
 };
 
@@ -11,7 +10,6 @@ impl Ext4FileSystem {
     /// 读取 2048 个字节
     pub fn test_get_file(&self, path: &str) {
         let read_size = 2048;
-        let mut read_buf = vec![0u8; read_size as usize];
         let child_inode = self.generic_open(path, &mut 2, false, 0, &mut 0).unwrap();
         let mut data = vec![0u8; read_size as usize];
         // 读取文件内容

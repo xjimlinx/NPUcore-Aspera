@@ -23,13 +23,15 @@ impl MemBlockWrapper {
         Self(Mutex::new(MemBlock(MemBlockWrapper::BASE_ADDR)))
     }
 }
-
+use log::info;
 impl BlockDevice for MemBlockWrapper {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
+        info!("[mem read_block] len : {}", buf.len());
         let blk = self.0.lock();
         buf.copy_from_slice(blk.block_ref(block_id, buf.len()));
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
+        info!("[mem write_block] len : {}", buf.len());
         let blk = self.0.lock();
         blk.block_refmut(block_id, buf.len()).copy_from_slice(buf);
     }

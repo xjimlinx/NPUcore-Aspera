@@ -19,6 +19,118 @@ use super::errno::*;
 
 pub const AT_FDCWD: usize = 100usize.wrapping_neg();
 
+// todo
+pub fn sys_splice(fd_in: usize, off_in: *mut usize, fd_out: usize, off_out: *mut usize, len: usize, _flags: u32) -> isize {
+    let task = current_task().unwrap();
+    let fd_table = task.files.lock();
+    let in_file = match fd_table.get_ref(fd_in) {
+        Ok(file_descriptor) => file_descriptor,
+        Err(errno) => return errno,
+    };
+    let out_file = match fd_table.get_ref(fd_out) {
+        Ok(file_descriptor) => file_descriptor,
+        Err(errno) => return errno,
+    };
+    info!("[sys_splice] outfd: {}, in_fd: {}", fd_out, fd_in);
+    if !in_file.readable() || !out_file.writable() {
+        return EBADF;
+    }
+    info!("[sys_splice] off_in: {:?}, off_out: {:?}", off_in, off_out);
+    // a buffer in kernel
+    const BUFFER_SIZE: usize = 4096;
+    let mut buffer = Vec::<u8>::with_capacity(BUFFER_SIZE);
+    let mut buffer_ptr: Option<&[u8]> = None;
+
+    let token = task.get_user_token();
+    // turn a pointer in user space into a pointer in kernel space if it is not null
+    let off_in = if off_in.is_null() {
+        off_in
+    } else {
+        match translated_refmut(token, off_in) {
+            Ok(offset) => {
+                if (*offset as isize) < 0 {
+                    return EINVAL;
+                };
+                offset as *mut usize
+            },
+            Err(errno) => return errno,
+        }
+    };
+    let off_out = if off_out.is_null() {
+        off_out
+    } else {
+        match translated_refmut(token, off_out) {
+            Ok(offset) => {
+                if (*offset as isize) < 0 {
+                    return EINVAL;
+                };
+                offset as *mut usize
+            },
+            Err(errno) => return errno,
+        }
+    };
+
+        let mut left_bytes = len;
+        loop {
+            let write_buffer = match buffer_ptr {
+                Some(buffer_ptr) => buffer_ptr,
+                None => {
+                    unsafe {
+                        buffer.set_len(left_bytes.min(BUFFER_SIZE));
+                    }
+                    let read_size = in_file.read(unsafe { off_in.as_mut() }, buffer.as_mut_slice());
+                    if (read_size as isize) < 0 {
+                        let errno = read_size as isize;
+                        return errno;
+                    } else if read_size == 0 {
+                        break;
+                    }
+                    unsafe {
+                        buffer.set_len(read_size);
+                    }
+                    buffer.as_slice()
+                }
+            };
+
+            let read_size = write_buffer.len();
+
+            // let fallback = |redundant_bytes: usize| unsafe {
+            //     let offset = offset.as_mut();
+            //     match offset {
+            //         Some(offset) => {
+            //             *offset -= redundant_bytes;
+            //         }
+            //         None => match in_file.lseek(-(redundant_bytes as isize), SeekWhence::SEEK_CUR) {
+            //             Ok(_) => {}
+            //             Err(errno) => panic!("failed! errno {}", errno),
+            //         },
+            //     }
+            // };
+
+            let write_size = out_file.write(unsafe { off_out.as_mut() }, write_buffer);
+            if (write_size as isize) < 0 {
+                // fallback(read_size);
+                let errno = read_size as isize;
+                return errno;
+            } else if write_size == 0 {
+                // fallback(read_size);
+                break;
+            } 
+
+            buffer_ptr = if write_size < read_size {
+                Some(&write_buffer[write_size..])
+            } else {
+                None
+            };
+            left_bytes -= write_size;
+        }
+        let send_size = len - left_bytes;
+        info!("[sys_sendfile] send bytes: {}", send_size);
+        send_size as isize
+
+}
+
+
 /// # Warning
 /// `fs` & `files` is locked in this function
 fn __openat(dirfd: usize, path: &str) -> Result<FileDescriptor, isize> {
@@ -67,7 +179,6 @@ pub fn sys_getcwd(buf: usize, size: usize) -> isize {
     buf as isize
 }
 
-// Move the read/write file offset
 pub fn sys_lseek(fd: usize, offset: isize, whence: u32) -> isize {
     // whence is not valid
     let whence = match SeekWhence::from_bits(whence) {
@@ -496,6 +607,23 @@ pub fn sys_dup(oldfd: usize) -> isize {
     newfd as isize
 }
 
+pub fn sys_dup2(oldfd: usize, newfd: usize) -> isize {
+    let task = current_task().unwrap();
+    // if oldfd == newfd {
+    //     return EINVAL;
+    // }
+    let mut fd_table = task.files.lock();
+    let mut file_descriptor = match fd_table.get_ref(oldfd) {
+        Ok(file_descriptor) => file_descriptor.clone(),
+        Err(errno) => return errno,
+    };
+    file_descriptor.set_cloexec(false);
+    match fd_table.insert_at(file_descriptor, newfd) {
+        Ok(fd) => fd as isize,
+        Err(errno) => errno,
+    }
+}
+
 pub fn sys_dup3(oldfd: usize, newfd: usize, flags: u32) -> isize {
     info!(
         "[sys_dup3] oldfd: {}, newfd: {}, flags: {:?}",
@@ -623,6 +751,50 @@ pub fn sys_fstatat(dirfd: usize, path: *const u8, buf: *mut u8, flags: u32) -> i
         Err(errno) => errno,
     }
 }
+/// warning: 此函数没有完全实现，没有实现根据mask来填充statx的值，并且没有直接维护statx结构体，通过stat结构体间接实现
+pub fn sys_statx(dirfd: usize, path: *const u8, flags: u32, mask: u32, buf: *mut u8) -> isize {
+    let token = current_user_token();
+    let path = match translated_str(token, path) {
+        Ok(path) => path,
+        Err(errno) => return errno,
+    };
+    let flags = match FstatatFlags::from_bits(flags) {
+        Some(flags) => flags,
+        None => {
+            warn!("[sys_statx] unknown flags");
+            return EINVAL;
+        }
+    };
+
+    info!(
+        "[sys_statx] dirfd: {}, path: {:?}, flags: {:?}",
+        dirfd as isize, path, flags,
+    );
+
+    let task = current_task().unwrap();
+    let file_descriptor = match dirfd {
+        AT_FDCWD => task.fs.lock().working_inode.as_ref().clone(),
+        fd => {
+            let fd_table = task.files.lock();
+            match fd_table.get_ref(fd) {
+                Ok(file_descriptor) => file_descriptor.clone(),
+                Err(errno) => return errno,
+            }
+        }
+    };
+
+    match file_descriptor.open(&path, OpenFlags::O_RDONLY, false) {
+        Ok(file_descriptor) => {
+            if copy_to_user(token, &file_descriptor.get_statx(mask), buf as *mut Statx).is_err() {
+                log::error!("[sys_statx] Failed to copy to {:?}", buf);
+                return EFAULT;
+            };
+            log::debug!("[sys_statx] statx:\n{:?}", file_descriptor.get_statx(mask));
+            SUCCESS
+        }
+        Err(errno) => errno,
+    }
+}
 
 pub fn sys_fstat(fd: usize, statbuf: *mut u8) -> isize {
     let task = current_task().unwrap();
@@ -630,8 +802,6 @@ pub fn sys_fstat(fd: usize, statbuf: *mut u8) -> isize {
 
     info!("[sys_fstat] fd: {}", fd);
     let file_descriptor = match fd {
-        // AT_FDCWD 表示这个fd代表的是当前进程的工作目录
-        // 所以返回当前进程的文件系统的工作目录
         AT_FDCWD => task.fs.lock().working_inode.as_ref().clone(),
         fd => {
             let fd_table = task.files.lock();
@@ -712,7 +882,10 @@ pub fn sys_fsync(fd: usize) -> isize {
     SUCCESS
 }
 
-// 更改工作目录
+pub fn sys_fchmodat() -> isize {
+    0
+}
+
 pub fn sys_chdir(path: *const u8) -> isize {
     let task = current_task().unwrap();
     let token = task.get_user_token();
@@ -724,9 +897,6 @@ pub fn sys_chdir(path: *const u8) -> isize {
 
     let mut lock = task.fs.lock();
 
-    // 可以看到这里调用了 working_inode 的 cd 方法
-    // 也就是说，每次调用 chdir 都会改变当前进程的工作目录
-    // 而这个工作目录，就是 working_inode
     match lock.working_inode.cd(&path) {
         Ok(new_working_inode) => {
             lock.working_inode = new_working_inode;
@@ -736,25 +906,13 @@ pub fn sys_chdir(path: *const u8) -> isize {
     }
 }
 
-/// openat 系统调用
-/// # 参数
-/// + dirfd: 文件所在目录的文件描述符
-/// + path: 文件路径
-/// + flags: 文件打开标志
-/// + mode: 文件权限
-/// # 返回值
-/// + 文件描述符（索引）
 pub fn sys_openat(dirfd: usize, path: *const u8, flags: u32, mode: u32) -> isize {
-    // 获取当前进程
     let task = current_task().unwrap();
-    // 获取用户态的令牌
     let token = task.get_user_token();
-    // 从用户空间加载一个字符串到内核空间，但是不包含结束符 `\0`
     let path = match translated_str(token, path) {
         Ok(path) => path,
         Err(errno) => return errno,
     };
-    // 匹配 flags 文件打开的标志
     let flags = match OpenFlags::from_bits(flags) {
         Some(flags) => flags,
         None => {
@@ -762,33 +920,25 @@ pub fn sys_openat(dirfd: usize, path: *const u8, flags: u32, mode: u32) -> isize
             return EINVAL;
         }
     };
-    // 匹配 mode 文件权限
     let mode = StatMode::from_bits(mode);
     info!(
         "[sys_openat] dirfd: {}, path: {}, flags: {:?}, mode: {:?}",
         dirfd as isize, path, flags, mode
     );
-    // 获取当前进程的 FDT 文件描述符表
     let mut fd_table = task.files.lock();
-    // 获取要打开的文件所在的目录的文件描述符
     let file_descriptor = match dirfd {
-        // AT_FDCWD 代表当前工作目录（task的一个属性）
-        // 则获取当前工作目录的 inode
         AT_FDCWD => task.fs.lock().working_inode.as_ref().clone(),
-        // 操作的路径是相对于指定的文件描述符所在的目录
         fd => match fd_table.get_ref(fd) {
             Ok(file_descriptor) => file_descriptor.clone(),
             Err(errno) => return errno,
         },
     };
 
-    // 尝试从上面获得的 文件所在目录的 文件描述符打开文件并获取新的文件描述符
     let new_file_descriptor = match file_descriptor.open(&path, flags, false) {
         Ok(file_descriptor) => file_descriptor,
         Err(errno) => return errno,
     };
 
-    // 将新打开的文件描述符插入到文件描述符表中
     let new_fd = match fd_table.insert(new_file_descriptor) {
         Ok(fd) => fd,
         Err(errno) => return errno,
@@ -905,18 +1055,14 @@ bitflags! {
 }
 
 /// # Warning
-/// 目前不支持删除硬链接，所以该系统调用会直接删除文件
+/// Currently we have no hard-link so this syscall will remove file directly.
 pub fn sys_unlinkat(dirfd: usize, path: *const u8, flags: u32) -> isize {
-    // 获取当前任务
     let task = current_task().unwrap();
-    // 获取用户令牌
     let token = task.get_user_token();
-    // 从用户空间翻译路径
     let path = match translated_str(token, path) {
         Ok(path) => path,
         Err(errno) => return errno,
     };
-    // 解析 flags
     let flags = match UnlinkatFlags::from_bits(flags) {
         Some(flags) => flags,
         None => {
@@ -929,7 +1075,6 @@ pub fn sys_unlinkat(dirfd: usize, path: *const u8, flags: u32) -> isize {
         dirfd as isize, path, flags
     );
 
-    // 获取文件描述符
     let file_descriptor = match dirfd {
         AT_FDCWD => task.fs.lock().working_inode.as_ref().clone(),
         fd => {
@@ -940,7 +1085,6 @@ pub fn sys_unlinkat(dirfd: usize, path: *const u8, flags: u32) -> isize {
             }
         }
     };
-    // 删除路径下的文件或目录
     match file_descriptor.delete(&path, flags.contains(UnlinkatFlags::AT_REMOVEDIR)) {
         Ok(_) => SUCCESS,
         Err(errno) => errno,

@@ -1,10 +1,9 @@
+use core::panic;
 use core::{convert::TryInto, intrinsics::size_of};
 
 use super::block_group::Block;
-use super::error::return_errno_with_message;
 use super::ext4fs::Ext4FileSystem;
 use super::*;
-use crate::fs::ext4::error::Errno;
 use crate::syscall::errno::SUCCESS;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -179,7 +178,8 @@ impl ExtentNode {
     pub fn load_from_data(data: &[u8], is_root: bool) -> Self {
         if is_root {
             if data.len() != 15 * 4 {
-                return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                // return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                panic!("Invalid data length for root node");
             }
 
             let mut root_data = [0u32; 15];
@@ -196,7 +196,8 @@ impl ExtentNode {
             }
         } else {
             if data.len() != BLOCK_SIZE {
-                return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                // return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                panic!("Invalid data length for root node");
             }
             let header = Ext4ExtentHeader::load_from_u8(&data[..size_of::<Ext4ExtentHeader>()]);
             ExtentNode {
@@ -211,7 +212,8 @@ impl ExtentNode {
     pub fn load_from_data_mut(data: &mut [u8], is_root: bool) -> Self {
         if is_root {
             if data.len() != 15 * 4 {
-                return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                // return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                panic!("Invalid data length for root node");
             }
 
             let mut root_data = [0u32; 15];
@@ -228,9 +230,9 @@ impl ExtentNode {
             }
         } else {
             if data.len() != BLOCK_SIZE {
-                return_errno_with_message(Errno::EINVAL, "Invalid data length for root node");
+                panic!("Invalid data length for root node")
             }
-            let mut header =
+            let header =
                 *Ext4ExtentHeader::load_from_u8_mut(&mut data[..size_of::<Ext4ExtentHeader>()]);
             ExtentNode {
                 header,
@@ -276,11 +278,11 @@ impl ExtentNode {
                 let mut l = 1;
                 let mut r = (self.header.entries_count - 1) as usize;
                 while l <= r {
-                    let mut m = l + (r - l) / 2;
+                    let m = l + (r - l) / 2;
                     let offset = size_of::<Ext4ExtentHeader>() + m * size_of::<Ext4Extent>();
-                    let mut ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
+                    let ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
 
-                    if (lblock < ext.first_block) {
+                    if lblock < ext.first_block {
                         r = m - 1;
                     } else {
                         l = m + 1;
@@ -288,7 +290,7 @@ impl ExtentNode {
                 }
 
                 let offset = size_of::<Ext4ExtentHeader>() + (l - 1) * size_of::<Ext4Extent>();
-                let mut ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
+                let ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
                 return Some((ext, l - 1));
             }
         }
@@ -412,6 +414,7 @@ impl Ext4ExtentIndex {
     }
 }
 
+#[allow(unused)]
 impl Ext4Extent {
     /// Get the first block number(logical) of the extent.
     pub fn get_first_block(&self) -> u32 {
@@ -587,7 +590,8 @@ impl Ext4FileSystem {
                 search_path.depth += 1;
                 pblock_of_node = next_block as usize;
             } else {
-                return_errno_with_message(Errno::ENOENT, "Extentindex not found");
+                // return_errno_with_message(Errno::ENOENT, "Extentindex not found");
+                panic!("Extentindex not found");
             }
         }
 
@@ -833,7 +837,7 @@ impl Ext4FileSystem {
             return Ok(());
         }
 
-        return_errno_with_message(Errno::ENOTSUP, "Not supported insert extent at nonroot");
+        // panic!("Not supported insert extent at nonroot");
     }
 
     // finds empty index and adds new leaf. if no free index is found, then it requests in-depth growing.
@@ -875,20 +879,20 @@ impl Ext4FileSystem {
         new_ext4block.data[60..].fill(0);
 
         // set new block header
-        let mut new_header = Ext4ExtentHeader::load_from_u8_mut(&mut new_ext4block.data);
+        let new_header = Ext4ExtentHeader::load_from_u8_mut(&mut new_ext4block.data);
         new_header.set_magic();
         let space = (BLOCK_SIZE - core::mem::size_of::<Ext4ExtentHeader>())
             / core::mem::size_of::<Ext4Extent>();
         new_header.set_max_entries_count(space as u16);
 
         // Update top-level index: num,max,pointer
-        let mut root_header = inode_ref.inode.root_extent_header_mut();
+        let root_header = inode_ref.inode.root_extent_header_mut();
         root_header.set_entries_count(1);
         root_header.add_depth();
 
         let root_depth = root_header.depth;
         let root_first_extent_block = inode_ref.inode.root_extent_at(0).first_block;
-        let mut root_first_index = inode_ref.inode.root_first_index_mut();
+        let root_first_index = inode_ref.inode.root_first_index_mut();
         root_first_index.store_pblock(new_block);
         if root_depth == 0 {
             // Root extent block becomes index block

@@ -145,6 +145,7 @@ impl Ext4FileSystem {
             if ext4_bmap_is_bit_clr(&bitmap_block.data, idx_in_bg) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, idx_in_bg);
                 block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                 alloc = self.bg_idx_to_addr(idx_in_bg, bgid);
@@ -163,6 +164,7 @@ impl Ext4FileSystem {
                     ext4_bmap_bit_set(&mut bitmap_block.data, tmp_idx);
                     block_group
                         .set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                    // 此处不需要考虑对齐
                     self.block_device
                         .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                     alloc = self.bg_idx_to_addr(tmp_idx, bgid);
@@ -176,6 +178,7 @@ impl Ext4FileSystem {
             if ext4_bmap_bit_find_clr(&bitmap_block.data, idx_in_bg, blk_in_bg, &mut rel_blk_idx) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, rel_blk_idx);
                 block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                 alloc = self.bg_idx_to_addr(rel_blk_idx, bgid);
@@ -258,6 +261,7 @@ impl Ext4FileSystem {
             if ext4_bmap_is_bit_clr(&bitmap_block.data, idx_in_bg) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, idx_in_bg);
                 block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                 alloc = self.bg_idx_to_addr(idx_in_bg, bgid);
@@ -278,6 +282,7 @@ impl Ext4FileSystem {
                     ext4_bmap_bit_set(&mut bitmap_block.data, tmp_idx);
                     block_group
                         .set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                    // 此处不需要考虑对齐
                     self.block_device
                         .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                     alloc = self.bg_idx_to_addr(tmp_idx, bgid);
@@ -293,6 +298,7 @@ impl Ext4FileSystem {
             if ext4_bmap_bit_find_clr(&bitmap_block.data, idx_in_bg, blk_in_bg, &mut rel_blk_idx) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, rel_blk_idx);
                 block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
                 alloc = self.bg_idx_to_addr(rel_blk_idx, bgid);
@@ -324,7 +330,7 @@ impl Ext4FileSystem {
         let mut super_block = self.superblock;
         let block_size = BLOCK_SIZE as u64;
 
-        // Update superblock free blocks count
+        // 更新超级块的空闲块数
         let mut super_blk_free_blocks = super_block.free_blocks_count();
         super_blk_free_blocks -= 1;
         super_block.set_free_blocks_count(super_blk_free_blocks);
@@ -385,6 +391,7 @@ impl Ext4FileSystem {
             start += free_cnt as u64;
 
             bg.set_block_group_balloc_bitmap_csum(&super_block, &data);
+            // 此处不需要考虑对齐
             self.block_device
                 .write_block(block_bitmap_block as usize, &data);
 

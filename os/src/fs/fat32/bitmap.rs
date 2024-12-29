@@ -6,6 +6,7 @@ use spin::{Mutex, MutexGuard};
 const VACANT_CLUS_CACHE_SIZE: usize = 64;
 const FAT_ENTRY_FREE: u32 = 0;
 const FAT_ENTRY_RESERVED_TO_END: u32 = 0x0FFF_FFF8;
+/// fat中簇的结束位置
 pub const EOC: u32 = 0x0FFF_FFFF;
 /// *In-memory* data structure
 /// 内存内的fat数据结构.
@@ -118,12 +119,12 @@ impl Fat {
         let fat_offset = clus_num * 4;
         (fat_offset % (self.byts_per_sec as u32)) as usize
     }
-    /// Assign the cluster entry to `current` to `next`
-    /// If `current` is None, ignore this operation
-    /// # Argument
-    /// + `block_device`: pointer of block device
-    /// + `current`: current cluster number
-    /// + `next`: next cluster to set
+    /// 将簇项从当前指向下一个
+    /// 如果 current 是空值，忽略该操作
+    /// # 参数
+    /// + `block_device`: 块设备对象
+    /// + `current`: 当前簇号
+    /// + `next`: 要设置的下一个簇
     fn set_next_clus(&self, block_device: &Arc<dyn BlockDevice>, current: Option<u32>, next: u32) {
         if current.is_none() {
             return;
@@ -142,44 +143,48 @@ impl Fat {
             )
     }
 
-    /// Allocate as many clusters (but not greater than alloc_num) as possible.
-    /// # Argument
-    /// + `block_device`: The target block_device.
-    /// + `alloc_num`: The number of clusters to allocate.
-    /// + `last`: The preceding cluster of the one to be allocated.
-    /// # Return value
-    /// List of cluster numbers
+    /// 尽可能多的分配簇，但是不会比alloc_num大
+    /// # 参数
+    /// + `block_device`: 目标块设备
+    /// + `alloc_num`: 要分配的簇的数量
+    /// + `last`: 待分配簇的前一个簇
+    /// # 返回值
+    /// 簇号列表
     pub fn alloc(
         &self,
         block_device: &Arc<dyn BlockDevice>,
         alloc_num: usize,
         mut last: Option<u32>,
     ) -> Vec<u32> {
+        // 先在内存中创建一个空的簇号列表
         let mut allocated_cluster = Vec::with_capacity(alloc_num);
-        // A lock is required to guarantee mutual exclusion between processes.
+        // 需要一个锁来保证进程间的互斥
         let mut hlock = self.hint.lock();
+        // 从0到alloc_num，循环直到分配完alloc_num个簇
         for _ in 0..alloc_num {
+            // 获取簇
             last = self.alloc_one(block_device, last, &mut hlock);
             if last.is_none() {
-                // There is no more free cluster.
-                // Or `last` next cluster is valid.
+                // 已经没有空闲簇了，或者last的下一个簇是有效的
                 log::error!("[alloc]: alloc error, last: {:?}", last);
                 break;
             }
+            // 将分配的簇号加入到allocated_cluster中
             allocated_cluster.push(last.unwrap());
         }
+        // 设置最后一个簇的下一个簇为EOC
         self.set_next_clus(block_device, last, EOC);
         allocated_cluster
     }
 
-    /// Find and allocate a cluster from data area.
-    /// # Argument
-    /// + `block_device`: The target block_device.
-    /// + `last`: The preceding cluster of the one to be allocated.
+    /// 从数据区寻找并分配一个簇
+    /// # 参数
+    /// + `block_device`: 目标块设备
+    /// + `last`: 要分配的簇号的前一个簇
     /// + `hlock`: The lock of hint(Fat).
-    /// # Return value
-    /// If successful, return allocated cluster number
-    /// otherwise, return None
+    /// # 返回值
+    /// 如果成功分配，返回分配的簇号
+    /// 否则返回空
     fn alloc_one(
         &self,
         block_device: &Arc<dyn BlockDevice>,
@@ -190,9 +195,9 @@ impl Fat {
             let next_cluster_of_current = self.get_next_clus_num(last.unwrap(), block_device);
             debug_assert!(next_cluster_of_current >= FAT_ENTRY_RESERVED_TO_END);
         }
-        // Now we can allocate clusters freely
+        // 现在我们可以自由的分配簇了
 
-        // Get a free cluster from `vacant_clus`
+        // 从 vacant_clus 中获取一个空闲簇
         if let Some(free_clus_id) = self.vacant_clus.lock().pop_back() {
             self.set_next_clus(block_device, last, free_clus_id);
             return Some(free_clus_id);

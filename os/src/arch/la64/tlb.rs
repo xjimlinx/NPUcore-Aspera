@@ -1,14 +1,18 @@
 use super::{ASId, TLBEHi, TLBIdx, TLBEL, TLBELO0, TLBELO1};
 use crate::mm::{PhysPageNum, VirtPageNum};
 use core::arch::asm;
+#[allow(unused)]
 pub const USR_ASID: usize = 0;
+#[allow(unused)]
 pub const KERN_ASID: usize = (1 << 10) - 1;
 #[inline(always)]
+#[allow(unused)]
 /// Set Adress Space ID of current core to the low 10 bits of `asid`
 pub fn set_asid(asid: usize) {
     let mut id = ASId::read();
     id.set_asid(asid & (1 << id.get_asid_width() - 1)).write();
 }
+#[allow(unused)]
 pub fn tlb_addr_allow_write(vpn: VirtPageNum, ppn: PhysPageNum) -> Result<(), ()> {
     TLBEHi::read().set_vppn(vpn).write();
     tlbsrch();
@@ -37,6 +41,7 @@ pub fn tlb_global_invalidate() {
         asm!("invtlb 0x0,$zero, $zero");
     }
 }
+#[allow(unused)]
 pub fn tlb_read(idx: usize) -> Result<(PhysPageNum, PhysPageNum), ()> {
     TLBIdx::read().set_index(idx).write();
     let ret = TLBIdx::read();
@@ -49,6 +54,7 @@ pub fn tlb_read(idx: usize) -> Result<(PhysPageNum, PhysPageNum), ()> {
         Ok((TLBELO0::read().get_ppn(), TLBELO1::read().get_ppn()))
     }
 }
+#[allow(unused)]
 pub fn tlb_search(vpn: VirtPageNum) -> Result<PhysPageNum, ()> {
     TLBEHi::read().set_vppn(vpn).write();
 

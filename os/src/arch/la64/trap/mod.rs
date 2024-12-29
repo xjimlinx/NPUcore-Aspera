@@ -18,7 +18,6 @@ use core::arch::{asm, global_asm};
 use core::ptr::{addr_of, addr_of_mut};
 
 pub use context::{MachineContext, TrapContext, UserContext};
-// use log::debug;
 use register::{
     BadV, EStat, TLBRBadV, TLBREHi, TLBRELo0, TLBRELo1, TLBRPrMd, PGD, PGDH, PGDL, PWCH, PWCL,
     TLBRERA,
@@ -40,7 +39,7 @@ extern "C" {
 #[link_section = ".text.__rfill"]
 #[naked]
 #[no_mangle]
-pub fn __rfill() {
+pub extern "C" fn __rfill() {
     //crmd = 0b0_01_01_10_0_00;
     //         w_dm_df_pd_i_lv;
     // let i = 0xA8;

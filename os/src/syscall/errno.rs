@@ -416,16 +416,3 @@ pub enum Errno {
     ERFKILL = -132,
     EHWPOISON = -133,
 }
-
-#[macro_export]
-macro_rules! set_errno {
-    ($errno:expr) => {};
-}
-
-#[macro_export]
-macro_rules! errno_exit {
-    ($errno:expr) => {
-	set_errno!($errno)!;
-        return expr;// or -1?
-    };
-}

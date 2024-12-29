@@ -1,6 +1,5 @@
 use crate::{arch::BLOCK_SZ, timer::TimeSpec};
 
-// 打开标志
 bitflags! {
     pub struct OpenFlags: u32 {
         const O_RDONLY      =   0o0;
@@ -15,15 +14,15 @@ bitflags! {
         const O_APPEND      =   0o2000;
         const O_NONBLOCK    =   0o4000;
         const O_DSYNC       =   0o10000;
+        const O_SYNC        =   0o4010000;
+        const O_RSYNC       =   0o4010000;
+        const O_DIRECTORY   =   0o200000;
+        const O_NOFOLLOW    =   0o400000;
+        const O_CLOEXEC     =   0o2000000;
         const O_ASYNC       =   0o20000;
         const O_DIRECT      =   0o40000;
         const O_LARGEFILE   =   0o100000;
-        const O_DIRECTORY   =   0o200000;
-        const O_NOFOLLOW    =   0o400000;
         const O_NOATIME     =   0o1000000;
-        const O_CLOEXEC     =   0o2000000;
-        const O_SYNC        =   0o4010000;
-        const O_RSYNC       =   0o4010000;
         const O_PATH        =   0o10000000;
         const O_TMPFILE     =   0o20200000;
     }
@@ -63,7 +62,6 @@ bitflags! {
         ///sticky bit (see below)
         const S_ISVTX   =   0o1000;
 
-        // 用户标志位
         ///owner has read, write, and execute permission
         const S_IRWXU   =   0o0700;
         ///owner has read permission
@@ -73,7 +71,6 @@ bitflags! {
         ///owner has execute permission
         const S_IXUSR   =   0o0100;
 
-        // 组标志位
         ///group has read, write, and execute permission
         const S_IRWXG   =   0o0070;
         ///group has read permission
@@ -83,7 +80,6 @@ bitflags! {
         ///group has execute permission
         const S_IXGRP   =   0o0010;
 
-        // 其他标志位
         ///others (not in group) have read, write,and execute permission
         const S_IRWXO   =   0o0007;
         ///others have read permission
@@ -98,13 +94,12 @@ bitflags! {
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 /// Store the file attributes from a supported file.
-/// 从一个支持的文件里面保存文件的属性
 pub struct Stat {
     /// ID of device containing file
     st_dev: u64,
     /// Inode number
     st_ino: u64,
-    /// File type and mode
+    /// File type and mode   
     st_mode: u32,
     /// Number of hard links
     st_nlink: u32,
@@ -130,7 +125,110 @@ pub struct Stat {
     st_ctime: TimeSpec,
     __unused: u64,
 }
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+/// Store the file attributes from a supported file.
+pub struct Statx {
+    pub stx_mask: u32,
+    pub stx_blksize: u32,
+    pub stx_attributes: u64,
+    pub stx_nlink: u32,
+    pub stx_uid: u32,
+    pub stx_gid: u32,
+    pub stx_mode: u16,
+    __statx_pad1: [u16; 1],
+    pub stx_ino: u64,
+    pub stx_size: u64,
+    pub stx_blocks: u64,
+    pub stx_attributes_mask: u64,
+    pub stx_atime: StatxTimestamp,
+    pub stx_btime: StatxTimestamp,
+    pub stx_ctime: StatxTimestamp,
+    pub stx_mtime: StatxTimestamp,
+    pub stx_rdev_major: u32,
+    pub stx_rdev_minor: u32,
+    pub stx_dev_major: u32,
+    pub stx_dev_minor: u32,
+    pub stx_mnt_id: u64,
+    __statx_pad2: u64,
+    __statx_pad3: [u64; 12],
+}
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct StatxTimestamp {
+    pub tv_sec: i64,
+    pub tv_nsec: u32,
+    pub __statx_timestamp_pad1: [i32; 1],
+}
 
+
+impl Statx {
+    #![allow(unused)]
+    /// Get the inode number described in the `Stat`
+    pub fn get_ino(&self) -> usize {
+        self.stx_ino as usize
+    }
+    pub fn get_size(&self) -> usize {
+        self.stx_size as usize
+    }
+    pub fn new(
+        stx_mask: u32,
+        stx_nlink: u32,
+        stx_mode: u16,
+        stx_ino: u64,
+        stx_size: u64,
+        stx_atime_sec: i64,
+        stx_ctime_sec: i64,
+        stx_mtime_sec: i64,
+        stx_rdev_major: u32,
+        stx_rdev_minor: u32,
+        stx_dev_major: u32,
+        stx_dev_minor: u32,
+    ) -> Self {
+        const BLK_SIZE: u32 = BLOCK_SZ as u32;
+        Self {
+            stx_mask: stx_mask,
+            stx_blksize: BLK_SIZE as u32,
+            stx_attributes: 0,
+            stx_nlink,
+            stx_uid: 0,
+            stx_gid: 0,
+            stx_mode,
+            __statx_pad1: [0 as u16; 1],
+            stx_ino,
+            stx_size,
+            stx_blocks: (stx_size as u64 + BLK_SIZE as u64 - 1) / BLK_SIZE as u64,
+            stx_attributes_mask: 0,
+            stx_atime: StatxTimestamp{
+                tv_sec: stx_atime_sec,
+                tv_nsec: 0,
+                __statx_timestamp_pad1: [0; 1],
+            },
+            stx_btime: StatxTimestamp{
+                tv_sec: stx_ctime_sec,
+                tv_nsec: 0,
+                __statx_timestamp_pad1: [0; 1],
+            },
+            stx_ctime: StatxTimestamp{
+                tv_sec: stx_ctime_sec,
+                tv_nsec: 0,
+                __statx_timestamp_pad1: [0; 1],
+            },
+            stx_mtime: StatxTimestamp{
+                tv_sec: stx_mtime_sec,
+                tv_nsec: 0,
+                __statx_timestamp_pad1: [0; 1],
+            },
+            stx_rdev_major,
+            stx_rdev_minor,
+            stx_dev_major,
+            stx_dev_minor,
+            stx_mnt_id: 0,
+            __statx_pad2: 0,
+            __statx_pad3: [0 as u64; 12],
+        }
+    }
+}
 #[allow(unused)]
 impl Stat {
     /// Get the inode number described in the `Stat`
@@ -139,6 +237,27 @@ impl Stat {
     }
     pub fn get_size(&self) -> usize {
         self.st_size as usize
+    }
+    pub fn get_mode(&self) -> u32 {
+        self.st_mode
+    }
+    pub fn get_nlink(&self) -> u32 {
+        self.st_nlink
+    }
+    pub fn get_dev(&self) -> u32 {
+        self.st_dev as u32
+    }
+    pub fn get_rdev(&self) -> u32 {
+        self.st_rdev as u32
+    }
+    pub fn get_atime(&self) -> usize {
+        self.st_atime.tv_sec as usize
+    }
+    pub fn get_mtime(&self) -> usize {
+        self.st_mtime.tv_sec as usize
+    }
+    pub fn get_ctime(&self) -> usize {
+        self.st_ctime.tv_sec as usize
     }
 
     pub fn new(

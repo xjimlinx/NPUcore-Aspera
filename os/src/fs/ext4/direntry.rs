@@ -5,6 +5,7 @@ use super::ext4fs::Ext4FileSystem;
 use super::*;
 use super::{crc::*, superblock::Ext4Superblock};
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use error::{Errno, Ext4Error};
 
@@ -118,6 +119,7 @@ impl<T> TryFrom<&[T]> for Ext4DirEntry {
     }
 }
 
+#[allow(unused)]
 /// Directory entry implementation.
 impl Ext4DirEntry {
     /// Check if the directory entry is unused.
@@ -263,6 +265,7 @@ impl Ext4DirEntryTail {
     }
 }
 
+#[allow(unused)]
 impl Ext4FileSystem {
     /// Find a directory entry in a directory
     ///
@@ -365,43 +368,43 @@ impl Ext4FileSystem {
 
     /// Get dir entries of a inode
     ///
-    /// Params:
-    /// inode: u32 - inode number of the directory
+    /// # 参数
+    /// + inode: u32 - 目录文件的inode号
     ///
-    /// Returns:
-    /// `Vec<Ext4DirEntry>` - list of directory entries
+    /// # 返回值
+    /// + `Vec<Ext4DirEntry>` - 目录项列表
     pub fn dir_get_entries(&self, inode: u32) -> Vec<Ext4DirEntry> {
         let mut entries = Vec::new();
 
-        // load inode
+        // 加载inode
         let inode_ref = self.get_inode_ref(inode);
         assert!(inode_ref.inode.is_dir());
 
-        // calculate total blocks
+        // 计算总块数
         let inode_size = inode_ref.inode.size();
         let total_blocks = inode_size / BLOCK_SIZE as u64;
 
-        // start from the first logical block
+        // 从第一个逻辑块开始
         let mut iblock = 0;
 
-        // iterate all blocks
+        // 遍历所有块
         while iblock < total_blocks {
-            // get physical block id of a logical block id
+            // 获取逻辑块号对应的物理块号
             let search_path = self.find_extent(&inode_ref, iblock as u32);
 
             if let Ok(path) = search_path {
                 // get the last path
                 let path = path.path.last().unwrap();
 
-                // get physical block id
+                // 获取物理块号
                 let fblock = path.pblock;
 
-                // load physical block
+                // 加载物理块
                 let ext4block =
                     Block::load_offset(self.block_device.clone(), fblock as usize * BLOCK_SIZE);
                 let mut offset = 0;
 
-                // iterate all entries in a block
+                // 遍历块内所有项
                 while offset < BLOCK_SIZE - core::mem::size_of::<Ext4DirEntryTail>() {
                     let de: Ext4DirEntry = ext4block.read_offset_as(offset);
                     if !de.unused() {
@@ -411,7 +414,53 @@ impl Ext4FileSystem {
                 }
             }
 
-            // go ot next block
+            // 前往下一个逻辑块
+            iblock += 1;
+        }
+        entries
+    }
+
+    pub fn dir_get_entries_from_inode_ref(&self, inode_ref: Arc<Ext4InodeRef>) -> Vec<Ext4DirEntry> {
+        let mut entries = Vec::new();
+
+        // 加载inode
+        assert!(inode_ref.inode.is_dir());
+
+        // 计算总块数
+        let inode_size = inode_ref.inode.size();
+        let total_blocks = inode_size / BLOCK_SIZE as u64;
+
+        // 从第一个逻辑块开始
+        let mut iblock = 0;
+
+        // 遍历所有块
+        while iblock < total_blocks {
+            // 获取逻辑块号对应的物理块号
+            let search_path = self.find_extent(&inode_ref, iblock as u32);
+
+            if let Ok(path) = search_path {
+                // get the last path
+                let path = path.path.last().unwrap();
+
+                // 获取物理块号
+                let fblock = path.pblock;
+
+                // 加载物理块
+                let ext4block =
+                    Block::load_offset(self.block_device.clone(), fblock as usize * BLOCK_SIZE);
+                let mut offset = 0;
+
+                // 遍历块内所有项
+                while offset < BLOCK_SIZE - core::mem::size_of::<Ext4DirEntryTail>() {
+                    let de: Ext4DirEntry = ext4block.read_offset_as(offset);
+                    if !de.unused() {
+                        entries.push(de);
+                    }
+                    offset += de.entry_len() as usize;
+                }
+            }
+
+            // 前往下一个逻辑块
             iblock += 1;
         }
         entries

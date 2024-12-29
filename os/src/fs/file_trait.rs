@@ -1,4 +1,4 @@
-use crate::fs::inode::DiskInodeType;
+use super::{dirent::Dirent, fat32::DiskInodeType};
 use crate::{mm::UserBuffer, syscall::errno::ENOTTY};
 use __alloc::string::String;
 use alloc::{
@@ -7,7 +7,7 @@ use alloc::{
 };
 use downcast_rs::*;
 use spin::Mutex;
-use super::dirent::Dirent;
+
 use super::{cache::PageCache, directory_tree::DirectoryTreeNode, layout::*};
 
 pub trait File: DowncastSync {
@@ -65,7 +65,6 @@ pub trait File: DowncastSync {
         ENOTTY
     }
     /// fcntl
-    #[allow(unused)]
     fn fcntl(&self, cmd: u32, arg: u32) -> isize;
 }
 impl_downcast!(sync File);

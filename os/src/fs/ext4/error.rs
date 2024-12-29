@@ -1,6 +1,7 @@
 /// Ext4Error number.
 #[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(unused)]
 pub enum Errno {
     EPERM = 1,         /* Operation not permitted */
     ENOENT = 2,        /* No such file or directory */

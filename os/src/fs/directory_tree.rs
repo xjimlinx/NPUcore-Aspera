@@ -8,15 +8,13 @@ use super::{
     layout::OpenFlags,
     Hwclock,
 };
+use crate::fs::dev::urandom::Urandom;
 #[cfg(feature = "oom_handler")]
 use crate::mm::tlb_invalidate;
 use crate::syscall::errno::*;
 use crate::{
     drivers::BLOCK_DEVICE,
-    fs::{
-        filesystem::FS_Type,
-        inode::{InodeImpl, OSInode},
-    },
+    fs::{filesystem::FS_Type, inode::OSInode},
 };
 use alloc::{
     collections::BTreeMap,
@@ -31,8 +29,6 @@ lazy_static! {
     // 文件系统实例
     pub static ref FILE_SYSTEM: Arc<dyn VFS> =
         <dyn VFS>::open_fs(BLOCK_DEVICE.clone(), Arc::new(Mutex::new(BlockCacheManager::new())));
-    // ROOT 用到的 具有File Trait的节点
-    pub static ref ROOT_OSINODE: Arc<dyn File> = todo!();
     // 目录树根节点
     pub static ref ROOT: Arc<DirectoryTreeNode> = {
         let curr_fs_type = FILE_SYSTEM.get_filesystem_type();
@@ -678,8 +674,13 @@ fn init_device_directory() {
         Err(_) => panic!("dev directory doesn't exist"),
     };
 
+    println!("[kernel] /dev init Successfully!");
+
+    println!("[kernel] {:?}", dev_inode.name);
     dev_inode.mkdir("shm");
     dev_inode.mkdir("misc");
+
+    println!("[kernel] shm and misc init Successfully!");
 
     let null_dev = DirectoryTreeNode::new(
         "null".to_string(),
@@ -687,18 +688,29 @@ fn init_device_directory() {
         Arc::new(Null {}),
         Arc::downgrade(&dev_inode.get_arc()),
     );
+    println!("[kernel] null_dev init successfully!");
     let zero_dev = DirectoryTreeNode::new(
         "zero".to_string(),
         Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Zero {}),
         Arc::downgrade(&dev_inode.get_arc()),
     );
+    println!("[kernel] zero_dev init successfully!");
+    let urandom_dev = DirectoryTreeNode::new(
+        "urandom".to_string(),
+        Arc::new(FileSystem::new(FS_Type::Null)),
+        Arc::new(Urandom {}),
+        Arc::downgrade(&dev_inode.get_arc()),
+    );
+    println!("[kernel] urandom_dev init successfully!");
     let tty_dev = DirectoryTreeNode::new(
         "tty".to_string(),
         Arc::new(FileSystem::new(FS_Type::Null)),
         Arc::new(Teletype::new()),
         Arc::downgrade(&dev_inode.get_arc()),
     );
+
+    println!("[kernel] tty_dev init successfully!");
     let mut lock = dev_inode.children.write();
     lock.as_mut().unwrap().insert("null".to_string(), null_dev);
     lock.as_mut().unwrap().insert("zero".to_string(), zero_dev);

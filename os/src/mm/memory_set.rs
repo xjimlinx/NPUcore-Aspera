@@ -35,6 +35,7 @@ lazy_static! {
 }
 
 /// Return the root PPN of kernel space
+#[allow(unused)]
 pub fn kernel_token() -> usize {
     KERNEL_SPACE.lock().token()
 }
@@ -311,10 +312,16 @@ impl<T: PageTable> MemorySet<T> {
                     let frame = area.inner.get_mut(&vpn);
                     let allocated_ppn = match frame {
                         // Page table is not mapped, but frame is in memory.
-                        Frame::InMemory(_) => unreachable!(),
+                        Frame::InMemory(_) => {
+                            info!("[Frame InMemory] addr: {:?}, vpn: {:?}, frame: {:?}", addr, vpn, frame);
+                            unreachable!();
+                        }
                         Frame::Unallocated => {
                             info!("[do_page_fault] addr: {:?}, solution: lazy alloc", addr);
-                            area.map_one_zeroed_unchecked(&mut self.page_table, vpn)
+                            let ppn = area.map_one_zeroed_unchecked(&mut self.page_table, vpn);
+                            let frame = area.inner.get_mut(&vpn);
+                            info!("[do_page_fault map_one] addr: {:?}, vpn: {:?}, frame: {:?}", addr, vpn, frame);
+                            ppn
                         }
                         #[cfg(feature = "oom_handler")]
                         Frame::Compressed(_) => {
@@ -786,7 +793,6 @@ impl<T: PageTable> MemorySet<T> {
             prot,
             None,
         );
-        // 针对 MAP_ANONYMOUS 和 MAP_PRIVATE 的情况
         if !flags.contains(MapFlags::MAP_ANONYMOUS) {
             warn!("[mmap] file-backed map!");
             let fd_table = task.files.lock();

@@ -1,5 +1,5 @@
 use super::{
-    cache::PageCache, directory_tree::DirectoryTreeNode, dirent::Dirent, file_trait::File,
+    cache::PageCache, directory_tree::DirectoryTreeNode, dirent::Dirent, file_trait::File, Statx,
 };
 use crate::{
     config::SYSTEM_FD_LIMIT,
@@ -16,16 +16,13 @@ use spin::Mutex;
 
 use super::layout::{OpenFlags, SeekWhence, Stat};
 
-/// ### 文件描述符
 #[derive(Clone)]
 pub struct FileDescriptor {
-    // 是否在执行execve时关闭文件描述符
     cloexec: bool,
     nonblock: bool,
     pub file: Arc<dyn File>,
 }
 
-/// ### 文件描述符的方法
 #[allow(unused)]
 impl FileDescriptor {
     pub fn new(cloexec: bool, nonblock: bool, file: Arc<dyn File>) -> Self {
@@ -88,25 +85,35 @@ impl FileDescriptor {
     pub fn get_stat(&self) -> Stat {
         self.file.get_stat()
     }
+    pub fn get_statx(&self, mask: u32) -> Statx {
+        let stat = self.file.get_stat();
+        Statx::new(
+            mask,
+            stat.get_nlink(),
+            stat.get_mode() as u16,
+            stat.get_ino() as u64,
+            stat.get_size() as u64,
+            stat.get_atime() as i64,
+            stat.get_ctime() as i64,
+            stat.get_mtime() as i64,
+            (stat.get_rdev() & 0xffff_00) >> 8 as u32,
+            (stat.get_rdev() & 0xff) as u32,
+            (stat.get_dev() & 0xffff_00) >> 8 as u32,
+            (stat.get_dev() & 0xff) as u32,
+        )
+    }
     pub fn open(&self, path: &str, flags: OpenFlags, special_use: bool) -> Result<Self, isize> {
-        // 代表打开当前目录或文件
         if path == "" {
             return Ok(self.clone());
         }
-        // 如果文件类型是常规文件并且路径不以 / 开头，则返回错误码
-        // 为什么要加上后面这个条件呢？
-        // 因为如果是常规文件，那么“当前目录”就是文件，而文件不应该有子目录
         if self.file.is_file() && !path.starts_with('/') {
             return Err(ENOTDIR);
         }
-        // 首先获取 inode，实际是获取DirectoryTreeNode
         let inode = self.file.get_dirtree_node();
-        // 如果 inode 为空，则返回错误码
         let inode = match inode {
             Some(inode) => inode,
             None => return Err(ENOENT),
         };
-        // 调用 inode 的 open 方法, 如果成功返回文件
         let file = match inode.open(path, flags, special_use) {
             Ok(file) => file,
             Err(errno) => return Err(errno),
@@ -225,7 +232,6 @@ impl FileDescriptor {
         unsafe { core::slice::from_raw_parts_mut(addr as *mut u8, self.get_size()) }
     }
 }
-
 /// ### 文件描述符表
 #[derive(Clone)]
 pub struct FdTable {
@@ -240,7 +246,7 @@ pub struct FdTable {
 /// ### 文件描述符表的方法
 #[allow(unused)]
 impl FdTable {
-    pub const DEFAULT_FD_LIMIT: usize = 64;
+    pub const DEFAULT_FD_LIMIT: usize = 128;
     pub const SYSTEM_FD_LIMIT: usize = SYSTEM_FD_LIMIT;
     pub fn new(inner: Vec<Option<FileDescriptor>>) -> Self {
         Self {
@@ -281,7 +287,6 @@ impl FdTable {
         self.hard_limit = limit;
     }
     #[inline]
-    // 获取文件描述符，如果成功返回文件描述符，否则返回错误码
     pub fn get_ref(&self, fd: usize) -> Result<&FileDescriptor, isize> {
         if fd >= self.inner.len() {
             return Err(EBADF);
@@ -306,9 +311,7 @@ impl FdTable {
         if fd >= self.inner.len() {
             return Err(EBADF);
         }
-        // 先尝试将fd从从inner中取出
         match self.inner[fd].take() {
-            // 将fd加入recycled
             Some(file_descriptor) => {
                 self.recycled.push(fd as u8);
                 Ok(file_descriptor)
@@ -332,27 +335,32 @@ impl FdTable {
         }
         Ok(())
     }
-
-    // 插入一个文件描述符，如果成功返回获取到的文件描述符号
-    // 若失败则返回错误码
+    pub fn find_min(&mut self) -> Option<u8> {
+        if let Some(&min_value) = self.recycled.iter().min() {
+            if let Some(index) = self.recycled.iter().position(|&x| x == min_value) {
+                self.recycled.remove(index);
+                Some(min_value)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
     #[inline]
     pub fn insert(&mut self, file_descriptor: FileDescriptor) -> Result<usize, isize> {
-        let fd = match self.recycled.pop() {
-            // 如果列表中有回收的文件描述符，则使用回收的文件描述符
+        // 直接pop fd省事，但是初赛openat测例要求新的fd>旧的，改为find_min，每次取最小的fd
+        // let fd = match self.recycled.pop() {
+        let fd = match self.find_min(){
             Some(fd) => {
                 self.inner[fd as usize] = Some(file_descriptor);
                 fd as usize
             }
-            // 如果没有回收的文件描述符，则新建一个文件描述符
             None => {
-                // 获取当前文件描述符数量
                 let current = self.inner.len();
-                // 如果当前文件描述符数量大于等于软限制，则返回错误码
                 if current == self.soft_limit {
                     return Err(EMFILE);
                 } else {
-                    // 否则将文件描述符加入inner，并返回当前文件描述符数量
-                    // 因为当文件描述符数量为0时，current为0，所以current也是下一个文件描述符的位置
                     self.inner.push(Some(file_descriptor));
                     current
                 }
@@ -377,7 +385,7 @@ impl FdTable {
             Ok(pos)
         } else {
             if pos >= self.soft_limit {
-                Err(EMFILE)
+                return Err(EMFILE);
             } else {
                 (current..pos)
                     .rev()
@@ -409,7 +417,7 @@ impl FdTable {
                     }
                     None => {
                         if current == self.soft_limit {
-                            Err(EMFILE)
+                            return Err(EMFILE);
                         } else {
                             self.inner.push(Some(file_descriptor));
                             Ok(current)
@@ -424,13 +432,21 @@ impl FdTable {
             }
         } else {
             if hint >= self.soft_limit {
-                Err(EMFILE)
+                return Err(EMFILE);
             } else {
                 (current..hint).for_each(|fd| self.recycled.push(fd as u8));
                 self.inner.resize(hint, None);
                 self.inner.push(Some(file_descriptor));
                 Ok(hint)
             }
+        }
+    }
+    /// Take the ownership of the given fd
+    pub fn take(&mut self, fd: usize) -> Option<FileDescriptor> {
+        if fd >= self.inner.len() {
+            None
+        } else {
+            self.inner[fd].take()
         }
     }
 }

@@ -4,6 +4,7 @@ pub mod pipe;
 pub mod socket;
 pub mod tty;
 pub mod zero;
+pub mod urandom;
 
 #[macro_export]
 macro_rules! makedev {
