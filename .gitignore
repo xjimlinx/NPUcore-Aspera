@@ -35,3 +35,6 @@ util/qemu-2k500/gz/qemu.log
 os/qemu.log
 rootfs-ext4.log
 /os/read_test
+easy-fs-fuse/rootfs-ubifs-ze.img
+easy-fs-fuse/uImage
+kernel.bin
