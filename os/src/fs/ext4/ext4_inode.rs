@@ -488,17 +488,17 @@ impl Ext4Inode {
         let data = unsafe {
             core::slice::from_raw_parts(self as *const _ as *const u8, size_of::<Ext4Inode>())
         };
-        println!("data is {:?}", data);
+        // println!("data is {:?}", data);
         // 因为写入的是inode的大小，不大可能越界。
         // 所以先读取一个块，再覆写，再写入
-        println!("[kernel sync to disk] Ext4Inode is {:#?}", self);
-        println!("[kernel] data len is {} inode_pos is {}",data.len(), inode_pos);
+        // println!("[kernel sync to disk] Ext4Inode is {:#?}", self);
+        // println!("[kernel] data len is {} inode_pos is {}",data.len(), inode_pos);
         // 计算要写入的块号
         let block_id = inode_pos / BLOCK_SIZE;
-        println!("[kernel] block_id is {}", block_id);
+        // println!("[kernel] block_id is {}", block_id);
         // 计算在一个块上的偏移量
         let offset = inode_pos % BLOCK_SIZE;
-        println!("[kernel] offset is {}", offset);
+        // println!("[kernel] offset is {}", offset);
         let mut buf = [0u8; BLOCK_SIZE];
         // 读取一个块
         block_device.read_block(block_id, &mut buf);
@@ -506,7 +506,6 @@ impl Ext4Inode {
         if offset + data.len() > BLOCK_SIZE {
             panic!("[kernel fs error] over border");
         }
-        // 这里有问题？
         buf[offset..offset + data.len()].copy_from_slice(&data);
         block_device.write_block(block_id, &buf);
         let temp_test_buf = buf.clone();
@@ -514,7 +513,6 @@ impl Ext4Inode {
         block_device.read_block(block_id, &mut buf);
         // println!("[kernel sync_inode_to_disk] read buf is {:?}", buf);
         assert!(temp_test_buf==buf);
-        println!("[kernel] temporary used, should be removed");
     }
 }
 
@@ -535,8 +533,8 @@ impl InodeTrait for Ext4Inode {
     fn get_file_type(&self) -> crate::fs::DiskInodeType {
         // todo!()
         let file_type = self.file_type();
-        println!("[kernel ext4inode file type] current inode is {:?}", self);
-        println!("[kernel ext4inode file type] file type is {:#?}", file_type);
+        // println!("[kernel ext4inode file type] current inode is {:?}", self);
+        // println!("[kernel ext4inode file type] file type is {:#?}", file_type);
         match file_type {
             InodeFileType::S_IFDIR => crate::fs::DiskInodeType::Directory,
             InodeFileType::S_IFREG => crate::fs::DiskInodeType::File,

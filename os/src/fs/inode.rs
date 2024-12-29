@@ -421,6 +421,12 @@ impl File for OSInode {
         self.dirnode_ptr.lock().upgrade()
     }
 
+    /// 打开文件
+    /// # 参数
+    /// + flags: 标志
+    /// + special_user: 打开这个文件的进程数
+    /// # 返回值
+    /// + 本身
     fn open(&self, flags: OpenFlags, special_use: bool) -> Arc<dyn File> {
         Arc::new(Self {
             readable: flags.contains(OpenFlags::O_RDONLY) || flags.contains(OpenFlags::O_RDWR),
@@ -613,6 +619,9 @@ impl File for OSInode {
             .inner
             .get_single_cache_lock(&inode_lock, inner_cache_id))
     }
+    /// 获取所有缓存
+    /// # 返回值
+    /// + 所有缓存
     fn get_all_caches(&self) -> Result<Vec<Arc<Mutex<PageCache>>>, ()> {
         Ok(self.inner.get_all_cache())
     }

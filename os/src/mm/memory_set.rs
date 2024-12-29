@@ -30,6 +30,7 @@ extern "C" {
 }
 
 lazy_static! {
+    /// 内核空间
     pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet<crate::mm::KernelPageTableImpl>>> =
         Arc::new(Mutex::new(MemorySet::new_kernel()));
 }
@@ -104,17 +105,17 @@ impl<T: PageTable> MemorySet<T> {
         )
         .unwrap();
     }
-    /// Insert an anonymous segment containing the space between `start_va.floor()` to `end_va.ceil()`
-    /// The space is allocated and added to the current MemorySet.
-    /// # Prerequisite
-    /// Assuming no conflicts. In other words, the space is NOT checked for space validity or overlap.
-    /// It is merely mapped, pushed into the current memory set.
-    /// Since CoW is implemented, the space is NOT allocated until a page fault is triggered.
+    /// 插入一个匿名段，包含从start_va.floor()到end_va.ceil()之间的空间
+    /// 该空间被分配并被添加到当前的 MemorySet.
+    /// # 前提条件
+    /// 假设没有冲突，或者说，该空间不会检查空间有效性或者重叠
+    /// 它只是被映射并推入到当前 memory set中
+    /// 由于实现了写时复制（CoW），该空间不会在插入时分配，直到触发页面错误时才会进行分配。
     pub fn insert_program_area(
         &mut self,
-        start_va: VirtAddr,
-        permission: MapPermission,
-        frames: Vec<Frame>,
+        start_va: VirtAddr,             // 起始虚拟地址
+        permission: MapPermission,      // 内存区域访问权限
+        frames: Vec<Frame>,             // 内存帧状态
     ) -> Result<(), ()> {
         let map_area = MapArea::from_existing_frame(start_va, MapType::Framed, permission, frames);
         self.push_no_alloc(map_area)?;
@@ -417,7 +418,7 @@ impl<T: PageTable> MemorySet<T> {
             MapPermission::R | MapPermission::X | MapPermission::U,
         );
     }
-    /// Create an empty kernel space.
+    /// 创建一个空的内核空间
     /// Without kernel stacks. (Is it done with .bss?)
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare_kern();

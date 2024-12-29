@@ -207,6 +207,7 @@ impl FileDescriptor {
     pub fn get_single_cache(&self, offset: usize) -> Result<Arc<Mutex<PageCache>>, ()> {
         self.file.get_single_cache(offset)
     }
+    /// 获取文件的所有缓存
     pub fn get_all_caches(&self) -> Result<Vec<Arc<Mutex<PageCache>>>, ()> {
         self.file.get_all_caches()
     }
@@ -214,13 +215,23 @@ impl FileDescriptor {
         self.file.ioctl(cmd, argp)
     }
     // for execve
+    /// 映射到内核空间
+    /// # 参数
+    /// + addr: 地址
+    /// # 返回值
+    /// 返回一个指向字节数组的静态引用，
+    /// 该数组在整个程序生命周期有效，
+    /// 返回的切片允许访问映射到内存中的数据
     pub fn map_to_kernel_space(&self, addr: usize) -> &'static [u8] {
+        // 获取缓存数据
         let caches = self.get_all_caches().unwrap();
+        // 获取内存帧
         let frames = caches
             .iter()
             .map(|cache| Frame::InMemory(cache.try_lock().unwrap().get_tracker()))
             .collect();
 
+        // 映射到内核空间
         crate::mm::KERNEL_SPACE
             .lock()
             .insert_program_area(

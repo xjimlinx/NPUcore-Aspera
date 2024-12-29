@@ -54,7 +54,7 @@ pub struct Ext4OSInode {
     /// ext4fs实例
     ext4fs: Arc<Ext4FileSystem>,
     /// inode锁
-    inode_lock: RwLock<InodeLock>
+    inode_lock: Arc<RwLock<InodeLock>>
     // // 文件
     // file_content_wrapper: Arc<Ext4FileContentWrapper>,
 }
@@ -67,7 +67,7 @@ impl Ext4OSInode {
         // file_content_wrapper: Arc<Ext4FileContentWrapper>,
     ) -> Arc<dyn File> {
         Arc::new(Self {
-            inode_lock: RwLock::new(InodeLock{}),
+            inode_lock: Arc::new(RwLock::new(InodeLock{})),
             readable: true,
             writable: true,
             special_use: true,
@@ -115,7 +115,7 @@ impl File for Ext4OSInode {
             }
         }
         Arc::new(Self {
-            inode_lock: RwLock::new(InodeLock{}),
+            inode_lock: Arc::new(RwLock::new(InodeLock{})),
             readable: self.readable,
             writable: self.writable,
             special_use: self.special_use,
@@ -173,17 +173,20 @@ impl File for Ext4OSInode {
         todo!()
     }
 
+    /// 获取文件大小
+    /// 需要修改
     fn get_size(&self) -> usize {
         self.inode.inode.get_file_size() as usize
     }
 
+    /// 获取文件状态
     fn get_stat(&self) -> crate::fs::Stat {
         todo!()
     }
 
+    /// 获取文件类型
     fn get_file_type(&self) -> DiskInodeType {
         // 利用inode的file_type字段
-        // 可否打印文件名?
         self.inode.inode.get_file_type()
     }
 
@@ -191,14 +194,27 @@ impl File for Ext4OSInode {
         *self.dirnode_ptr.lock() = dirnode_ptr;
     }
 
+    /// 获取目录树节点
     fn get_dirtree_node(&self) -> Option<Arc<DirectoryTreeNode>> {
         self.dirnode_ptr.lock().upgrade()
     }
 
+    /// 打开文件
     fn open(&self, flags: OpenFlags, special_use: bool) -> Arc<dyn File> {
-        todo!()
+        Arc::new(Self {
+            readable: flags.contains(OpenFlags::O_RDONLY) || flags.contains(OpenFlags::O_RDWR),
+            writable: flags.contains(OpenFlags::O_WRONLY) || flags.contains(OpenFlags::O_RDWR),
+            special_use,
+            append: flags.contains(OpenFlags::O_APPEND),
+            inode: self.inode.clone(),
+            offset: Mutex::new(0),
+            dirnode_ptr: self.dirnode_ptr.clone(),
+            ext4fs: self.ext4fs.clone(),
+            inode_lock: self.inode_lock.clone(),
+        })
     }
 
+    /// 获取子文件列表
     fn open_subfile(&self) -> Result<Vec<(String, Arc<dyn File>)>, isize> {
         // 先获取inode
         let inode_ref = self.inode.clone();
@@ -211,7 +227,7 @@ impl File for Ext4OSInode {
         // 子文件构造闭包，用于upcast
         let get_dyn_file = |entry: &Ext4DirEntry| -> Arc<dyn File> {
             Arc::new(Self {
-                inode_lock: RwLock::new(InodeLock{}),
+                inode_lock: Arc::new(RwLock::new(InodeLock{})),
                 readable: true,
                 writable: true,
                 special_use: false,
@@ -249,15 +265,15 @@ impl File for Ext4OSInode {
             DiskInodeType::Directory => InodeFileType::S_IFDIR.bits(),
             _ => todo!()
         };
-        println!("[kernel] inode_mode={}", inode_mode);
+        // println!("[kernel] inode_mode={}", inode_mode);
         let inode_perm = (InodePerm::S_IREAD | InodePerm::S_IWRITE).bits();
-        println!("[kernel] inode_perm={}", inode_perm);
+        // println!("[kernel] inode_perm={}", inode_perm);
         let new_inode_ref = self.ext4fs.create(self.inode.inode_num, name, inode_mode|inode_perm);
-        println!("[kernel] current new Inoderef in create is {:#?}", new_inode_ref);
+        // println!("[kernel] current new Inoderef in create is {:#?}", new_inode_ref);
 
         if let Ok(inode_ref) = new_inode_ref {
             Ok(Arc::new(Self {
-                inode_lock: RwLock::new(InodeLock{}),
+                inode_lock: Arc::new(RwLock::new(InodeLock{})),
                 readable: true,
                 writable: true,
                 special_use: false,
@@ -315,6 +331,13 @@ impl File for Ext4OSInode {
     }
 
     fn get_all_caches(&self) -> Result<Vec<Arc<Mutex<super::PageCache>>>, ()> {
+        let inode_lock = self.inode_lock.read();
+        // 参照fat_inode的get_all_cache，这里需要获取文件的大小，
+        // 然后获取文件对应的缓存块（页）数量，
+        // 然后初始化一个缓存页列表，
+        // 将所有的缓存块（页）加入到缓存页中
+        // 然后返回这个缓存列表
+
         todo!()
     }
 

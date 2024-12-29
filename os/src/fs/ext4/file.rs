@@ -255,15 +255,15 @@ impl Ext4FileSystem {
         let mut parent_inode_ref = self.get_inode_ref(parent);
 
         // 创建一个新inode
-        println!(
-            "[kernel in ext4fs create] inode name: {} inode mode: {}",
-            name, inode_mode
-        );
+        // println!(
+        //     "[kernel in ext4fs create] inode name: {} inode mode: {}",
+        //     name, inode_mode
+        // );
         let init_child_ref = self.create_inode(inode_mode)?;
-        println!(
-            "[kernel in ext4fs create] init_child_ref is {:#?}",
-            &init_child_ref
-        );
+        // println!(
+        //     "[kernel in ext4fs create] init_child_ref is {:#?}",
+        //     &init_child_ref
+        // );
 
         // 写回inode
         // TODO: 读和写的数据不一样
@@ -273,10 +273,10 @@ impl Ext4FileSystem {
         // 会有offset
         // 比较offset看看是不是出错了
         let mut child_inode_ref = self.get_inode_ref(init_child_ref.inode_num);
-        println!(
-            "[kernel in ext4fs create] child_inode_ref is {:#?}",
-            child_inode_ref
-        );
+        // println!(
+        //     "[kernel in ext4fs create] child_inode_ref is {:#?}",
+        //     child_inode_ref
+        // );
 
         // 链接新 inode 到父目录
         self.link(&mut parent_inode_ref, &mut child_inode_ref, name)?;

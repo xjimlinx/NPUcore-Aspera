@@ -19,22 +19,24 @@ use core::panic;
 use downcast_rs::{Downcast, DowncastSync};
 use spin::*;
 
+/// 文件内容 FileContent
 pub struct FileContent {
-    /// For FAT32, size is a value computed from FAT.
-    /// You should iterate around the FAT32 to get the size.
+    /// 对于FAT32，size 需要从FAT计算
+    /// 所以需要遍历FAT32来获取size
     size: u32,
-    /// The cluster list.
+    /// 簇列表
     clus_list: Vec<u32>,
-    /// If this file is a directory, hint will record the position of last directory entry(the first byte is 0x00).
+    /// 如果该文件是个目录，那么
+    /// hint 会记录最后一个目录项的位置（第一个字节为0x00）
     hint: u32,
 }
 
 impl VFSFileContent for FileContent {}
 
 impl FileContent {
-    /// Get file size
-    /// # Return Value
-    /// The file size
+    /// 获取文件大小
+    /// # 返回值
+    /// 文件大小
     #[inline(always)]
     pub fn get_file_size(&self) -> u32 {
         self.size
@@ -52,27 +54,28 @@ macro_rules! div_ceil {
  * People just like it better that way.*/
 /// The functionality of ClusLi & Inode can be merged.
 /// The struct for file information
+/// 上面这段描述可能是来自最早的文件系统实现，我也不知道怎么翻译
 pub struct Inode {
-    /// Inode lock: for normal operation
+    /// inode 锁: for normal operation
     inode_lock: RwLock<InodeLock>,
-    /// File Content
+    /// 文件内容
     file_content: RwLock<FileContent>,
     /// 与该Inode对应的文件缓存管理器
     file_cache_mgr: PageCacheManager,
-    /// File type
+    /// 文件类型
     file_type: Mutex<DiskInodeType>,
-    /// The parent directory of this inode
+    /// 父目录的inode
     parent_dir: Mutex<Option<(Arc<Self>, u32)>>,
-    /// file system
+    /// 文件系统实例
     fs: Arc<EasyFileSystem>,
-    /// Struct to hold time related information
+    /// 保存时间的结构体
     time: Mutex<InodeTime>,
     /// Info Inode to delete file content
     deleted: Mutex<bool>,
 }
 
 impl Drop for Inode {
-    /// Before deleting the inode, the file information should be written back to the parent directory
+    /// 在删除该inode之前，文件信息需要写回父目录
     fn drop(&mut self) {
         if *self.deleted.lock() {
             // Clear size
@@ -109,15 +112,15 @@ impl Drop for Inode {
 
 /// Constructor
 impl Inode {
-    /// Constructor for Inodes
-    /// # Arguments
-    /// + `fst_clus`: The first cluster of the file
-    /// + `file_type`: The type of the inode determined by the file
+    /// Inode 的构造函数
+    /// # 参数
+    /// + `fst_clus`: 文件的第一个簇
+    /// + `file_type`: 文件类型
     /// + `size`: NOTE: the `size` field should be set to `None` for a directory
-    /// + `parent_dir`: parent directory
-    /// + `fs`: The pointer to the file system
-    /// # Return Value
-    /// Pointer to Inode
+    /// + `parent_dir`: 父目录
+    /// + `fs`: 文件系统实例
+    /// # 返回值
+    /// 指向inode的指针
     pub fn new(
         fst_clus: u32,
         file_type: DiskInodeType,
@@ -162,12 +165,12 @@ impl Inode {
 
 /// Basic Funtions
 impl Inode {
-    /// Get first cluster of inode.
-    /// # Arguments
-    /// + `lock`: The lock of target file content
-    /// # Return Value
-    /// If cluster list isn't empty, it will return the first cluster list number.
-    /// Otherwise it will return None.
+    /// 获取第一个簇
+    /// # 参数
+    /// + `lock`: 目标文件内容的锁
+    /// # 返回值
+    /// 如果簇列表非空，会返回第一个簇
+    /// 否则返回空
     fn get_first_clus_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32> {
         let clus_list = &lock.clus_list;
         if !clus_list.is_empty() {
@@ -176,8 +179,8 @@ impl Inode {
             None
         }
     }
-    /// Get the number of clusters needed after rounding up according to size.
-    /// # Return Value
+    /// 获取根据大小向上取整后所需的簇数
+    /// # 返回值
     /// The number representing the number of clusters
     fn total_clus(&self, size: u32) -> u32 {
         //size.div_ceil(self.fs.clus_size())
@@ -186,12 +189,12 @@ impl Inode {
         //(size - 1 + clus_sz) / clus_sz
     }
 
-    /// Get a list of `block_id` represented by the given cache index.
-    /// # Arguments
-    /// + `clus_list`: The cluster list
+    /// 获取由给定缓存索引表示的块ID列表
+    /// # 参数
+    /// + `clus_list`: 簇列表
     /// + `inner_cache_id`: Index of T's file caches (usually 4096 size per cache)
-    /// # Return Value
-    /// List of `block_id`
+    /// # 返回值
+    /// 块号列表
     fn get_neighboring_sec(&self, clus_list: &Vec<u32>, inner_cache_id: usize) -> Vec<usize> {
         let sec_per_clus = self.fs.sec_per_clus as usize;
         let byts_per_sec = self.fs.byts_per_sec as usize;
@@ -214,7 +217,7 @@ impl Inode {
     /// # 参数
     /// + `efs`: 指向文件系统实例的指针
     /// # 返回值
-    /// A pointer to Inode
+    /// 指向Inode的指针
     pub fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
         let efs_concrete = Arc::downcast::<EasyFileSystem>(efs.clone()).unwrap();
         let rt_clus = efs_concrete.root_clus;
@@ -229,12 +232,13 @@ impl Inode {
 }
 
 /// File Content Operation
+/// 文件内容操作相关方法
 impl Inode {
-    /// Allocate the required cluster.
-    /// It will allocate as much as possible and then append to `clus_list` in `lock`.
-    /// # Arguments
-    /// + `lock`: The lock of target file content
-    /// + `alloc_num`: Required number of clusters
+    /// 分配需要的簇
+    /// 需要尽可能多的分配簇，然后追加到`lock`中的`clus_list`中
+    /// # 参数
+    /// + `lock`: 目标文件内容（锁）
+    /// + `alloc_num`: 需要分配的簇数
     fn alloc_clus(&self, lock: &mut RwLockWriteGuard<FileContent>, alloc_num: usize) {
         let clus_list = &mut lock.clus_list;
         let mut new_clus_list = self.fs.fat.alloc(
@@ -244,11 +248,11 @@ impl Inode {
         );
         clus_list.append(&mut new_clus_list);
     }
-    /// Release a certain number of clusters from `clus_list` in `lock`.
-    /// `clus_list` will be emptied when the quantity to be freed exceeds the available quantity.
-    /// # Arguments
-    /// + `lock`: The lock of target file content
-    /// + `dealloc_num`: The number of clusters that need to be released
+    /// 从lock中的clus_list释放一定数量的簇
+    /// 当要释放的数量超过可用数量时，`clus_list` 会被清空
+    /// # 参数
+    /// + `lock`: 目标文件内容（锁）
+    /// + `dealloc_num`: 需要释放的簇数
     fn dealloc_clus(&self, lock: &mut RwLockWriteGuard<FileContent>, dealloc_num: usize) {
         let clus_list = &mut lock.clus_list;
         let dealloc_num = dealloc_num.min(clus_list.len());
@@ -1124,12 +1128,12 @@ impl InodeTrait for Inode {
         self.get_single_cache_lock(&self.read(), inner_cache_id)
     }
 
-    /// Get a page cache corresponding to `inner_cache_id`.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// + `inner_cache_id`: The index of inner cache
-    /// # Return Value
-    /// Pointer to page cache
+    /// 获取与 `inner_cache_id` 对应的页面缓存。
+    /// # 参数
+    /// + `inode_lock`: inode 的锁
+    /// + `inner_cache_id`: 内部缓存的索引
+    /// # 返回值
+    /// 指向页面缓存的指针
     fn get_single_cache_lock(
         &self,
         _inode_lock: &RwLockReadGuard<InodeLock>,
@@ -1143,15 +1147,23 @@ impl InodeTrait for Inode {
         )
     }
 
-    /// Get all page caches corresponding to file
-    /// # Return Value
-    /// List of pointers to the page cache
+    /// 获取所有文件对应的页缓存
+    /// # 返回值
+    /// 指向页缓存的指针列表
     fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>> {
+        // 上锁，共享只读访问
         let inode_lock = self.read();
+        // 上锁，共享只读访问，lock为file_content
         let lock = self.file_content.read();
+        // 获取cache_num，缓存页数
+        // 计算公式为
+        // (文件大小 + 4096(页大小) - 1) / 4096(页大小)
+        // 确保文件内容不是CACHE_SZ整数倍时也可以多分配一个页面缓存
         let cache_num =
             (lock.size as usize + PageCacheManager::CACHE_SZ - 1) / PageCacheManager::CACHE_SZ;
+        // 初始化缓存列表，预先分配空间，避免多次重新分配内存
         let mut cache_list = Vec::<Arc<Mutex<PageCache>>>::with_capacity(cache_num);
+        // 遍历所有缓存页，加入到缓存列表中
         for inner_cache_id in 0..cache_num {
             cache_list.push(self.get_single_cache_lock(&inode_lock, inner_cache_id));
         }
