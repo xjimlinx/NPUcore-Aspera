@@ -28,8 +28,6 @@ os/logs/
 os/src/link_app.S
 os/last-*
 user/.ccls-cache/
-util/qemu-2k500/gz/rootfs-ubifs-ze.img
-util/qemu-2k500/gz/qemu.log
 
 os/qemu.log
 rootfs-ext4.log
