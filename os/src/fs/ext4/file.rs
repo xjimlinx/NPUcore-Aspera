@@ -255,28 +255,12 @@ impl Ext4FileSystem {
         let mut parent_inode_ref = self.get_inode_ref(parent);
 
         // 创建一个新inode
-        // println!(
-        //     "[kernel in ext4fs create] inode name: {} inode mode: {}",
-        //     name, inode_mode
-        // );
         let init_child_ref = self.create_inode(inode_mode)?;
-        // println!(
-        //     "[kernel in ext4fs create] init_child_ref is {:#?}",
-        //     &init_child_ref
-        // );
 
         // 写回inode
-        // TODO: 读和写的数据不一样
-        // 此步之后发生错误
+        // TODO: 在使用LoongsonNand的时候读和写的数据不一样
         self.write_back_inode_without_csum(&init_child_ref);
-        // 加载新inode
-        // 会有offset
-        // 比较offset看看是不是出错了
         let mut child_inode_ref = self.get_inode_ref(init_child_ref.inode_num);
-        // println!(
-        //     "[kernel in ext4fs create] child_inode_ref is {:#?}",
-        //     child_inode_ref
-        // );
 
         // 链接新 inode 到父目录
         self.link(&mut parent_inode_ref, &mut child_inode_ref, name)?;
@@ -388,42 +372,41 @@ impl Ext4FileSystem {
         Ok(child_inode_ref)
     }
 
-    /// Read data from a file at a given offset
-    ///
-    /// Params:
-    /// inode: u32 - inode number of the file
-    /// offset: usize - offset from where to read
-    /// read_buf: &mut [u8] - buffer to read the data into
-    ///
-    /// Returns:
-    /// `Result<usize>` - number of bytes read
+    /// 从指定文件的某个偏移位置开始读取数据
+    /// # 参数
+    /// + inode: u32 - 文件的inode号
+    /// + offset: usize - offset from where to read
+    /// + read_buf: &mut [u8] - 存储读取的数据的buffer
+    /// # 返回值
+    /// `Result<usize>`：读取的字节数
     pub fn read_at(&self, inode: u32, offset: usize, read_buf: &mut [u8]) -> Result<usize, isize> {
-        // read buf is empty, return 0
+        // 缓冲区为空，返回 0
         let mut read_buf_len = read_buf.len();
         if read_buf_len == 0 {
             return Ok(0);
         }
 
-        // get the inode reference
+        // 获取ext4inoderef对象
         let inode_ref = self.get_inode_ref(inode);
 
-        // get the file size
+        // 获取文件大小
         let file_size = inode_ref.inode.size();
 
-        // if the offset is greater than the file size, return 0
+        // 如果偏移量大于文件大小，返回 0
         if offset >= file_size as usize {
             return Ok(0);
         }
 
-        // adjust the read buffer size if the read buffer size is greater than the file size
+        // 如果 offset + read_buf_len 大于 file_size，调整读取大小
         if offset + read_buf_len > file_size as usize {
             read_buf_len = file_size as usize - offset;
         }
 
         // adjust the read buffer size if the read buffer size is greater than the file size
+        // 这步是不是和上一步重了？
         let size_to_read = min(read_buf_len, file_size as usize - offset);
 
-        // calculate the start block and unaligned size
+        // 计算起始块以及未对齐大小
         let iblock_start = offset / BLOCK_SIZE;
         let iblock_last = (offset + size_to_read + BLOCK_SIZE - 1) / BLOCK_SIZE; // round up to include the last partial block
         let unaligned_start_offset = offset % BLOCK_SIZE;
@@ -434,42 +417,44 @@ impl Ext4FileSystem {
         let mut iblock = iblock_start;
 
         // Unaligned read at the beginning
+        // 处理起始块未对齐的情况
         if unaligned_start_offset > 0 {
             let adjust_read_size = min(BLOCK_SIZE - unaligned_start_offset, size_to_read);
 
-            // get iblock physical block id
+            // 获取逻辑块号对应的物理块号
             let pblock_idx = self.get_pblock_idx(&inode_ref, iblock as u32)?;
 
-            // read data
+            // 读取数据
             let mut data = [0u8; BLOCK_SIZE];
             self.block_device.read_block(pblock_idx as usize, &mut data);
 
-            // copy data to read buffer
+            // 将数据复制到read_buf中
             read_buf[cursor..cursor + adjust_read_size].copy_from_slice(
                 &data[unaligned_start_offset..unaligned_start_offset + adjust_read_size],
             );
 
-            // update cursor and total bytes read
+            // 更新 cursor 以及 total_bytes_read
             cursor += adjust_read_size;
             total_bytes_read += adjust_read_size;
             iblock += 1;
         }
 
         // Continue with full block reads
+        // 继续处理整个的块
         while total_bytes_read < size_to_read {
             let read_length = core::cmp::min(BLOCK_SIZE, size_to_read - total_bytes_read);
 
-            // get iblock physical block id
+            // 获取逻辑块号对应的物理块号
             let pblock_idx = self.get_pblock_idx(&inode_ref, iblock as u32)?;
 
-            // read data
+            // 读取数据
             let mut data = [0u8; BLOCK_SIZE];
             self.block_device.read_block(pblock_idx as usize, &mut data);
 
-            // copy data to read buffer
+            // 将读取到的数据复制到read_buf中
             read_buf[cursor..cursor + read_length].copy_from_slice(&data[..read_length]);
 
-            // update cursor and total bytes read
+            // 更新 cursor 以及 total_bytes_read
             cursor += read_length;
             total_bytes_read += read_length;
             iblock += 1;

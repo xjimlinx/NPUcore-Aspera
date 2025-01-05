@@ -1,4 +1,5 @@
 // Sizes
+/// 内存大小，只有256MB？
 pub const MEMORY_SIZE: usize = 0x1000_0000;
 pub const USER_STACK_SIZE: usize = PAGE_SIZE * 40;
 pub const USER_HEAP_SIZE: usize = PAGE_SIZE * 20;
@@ -61,6 +62,7 @@ pub const USR_MMAP_BASE: usize = USR_MMAP_END - USR_SPACE_LEN / 8 + 0x3000;
 pub const TASK_SIZE: usize = USR_MMAP_BASE - USR_SPACE_LEN / 8;
 pub const ELF_DYN_BASE: usize = (((TASK_SIZE - LA_START) / 3 * 2) | LA_START) & (!(PAGE_SIZE - 1));
 
+// 512G的虚拟内存？
 pub const MMAP_BASE: usize = 0xFFFF_FF80_0000_0000;
 pub const MMAP_END: usize = 0xFFFF_FFFF_FFFF_0000;
 pub const SKIP_NUM: usize = 1;

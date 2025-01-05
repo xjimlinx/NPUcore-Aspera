@@ -49,8 +49,11 @@ trait FrameAllocator {
 }
 
 pub struct StackFrameAllocator {
+    // 当前分配器的位置，指向可分配区域的开始
     current: usize,
+    // 分配器的结束地址，表示可分配内存区域的末尾
     end: usize,
+    // 已回收的页面（内存框架）的列表
     recycled: Vec<usize>,
 }
 
@@ -72,6 +75,7 @@ impl StackFrameAllocator {
         self.cal()
     }
 }
+
 impl FrameAllocator for StackFrameAllocator {
     fn new() -> Self {
         Self {
@@ -170,7 +174,10 @@ pub fn oom_handler(req: usize) -> Result<(), ()> {
 }
 
 #[cfg(feature = "oom_handler")]
+/// # 参数
+/// + num: 预留的内存帧数量？
 pub fn frame_reserve(num: usize) {
+    // 
     let remain = FRAME_ALLOCATOR.read().unallocated_frames();
     if remain < num {
         oom_handler(num - remain).unwrap()

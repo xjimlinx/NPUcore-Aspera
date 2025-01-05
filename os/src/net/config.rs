@@ -80,7 +80,7 @@ impl<'a> NetInterface<'a> {
             inner: Mutex::new(None),
         }
     }
-   
+
     pub fn _add_socket<T>(&self, socket: T) -> SocketHandle
     where
         T: AnySocket<'a>,

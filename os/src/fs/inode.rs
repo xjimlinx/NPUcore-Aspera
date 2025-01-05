@@ -151,37 +151,31 @@ impl InodeTime {
             modify_time: 0,
         }
     }
-    /// Set the inode time's create time.
     /// 设置inode的创建时间
     pub fn set_create_time(&mut self, create_time: u64) {
         self.create_time = create_time;
     }
 
-    /// Get a reference to the inode time's create time.
     /// 获取inode的创建时间的引用
     pub fn create_time(&self) -> &u64 {
         &self.create_time
     }
 
-    /// Set the inode time's access time.
     /// 设置inode的访问时间
     pub fn set_access_time(&mut self, access_time: u64) {
         self.access_time = access_time;
     }
 
-    /// Get a reference to the inode time's access time.
     /// 获取inode的访问时间的引用
     pub fn access_time(&self) -> &u64 {
         &self.access_time
     }
 
-    /// Set the inode time's modify time.
     /// 设置inode的修改时间
     pub fn set_modify_time(&mut self, modify_time: u64) {
         self.modify_time = modify_time;
     }
 
-    /// Get a reference to the inode time's modify time.
     /// 获取inode的修改时间的引用
     pub fn modify_time(&self) -> &u64 {
         &self.modify_time
@@ -527,13 +521,18 @@ impl File for OSInode {
             Err(errno) => Err(errno),
         }
     }
+
+    /// 获取目录项
     fn get_dirent(&self, count: usize) -> Vec<Dirent> {
+        // 定义三个Dirent常量
         const DT_UNKNOWN: u8 = 0;
         const DT_DIR: u8 = 4;
         const DT_REG: u8 = 8;
 
         assert!(self.inner.is_dir());
+        // 获取当前偏移量
         let mut offset = self.offset.lock();
+        // 获取inode锁
         let inode_lock = self.inner.write();
         log::debug!(
             "[get_dirent] tot size: {}, offset: {}, count: {}",
@@ -541,7 +540,9 @@ impl File for OSInode {
             offset,
             count
         );
+        println!("[kernel] current offset1: {:?}", *offset);
 
+        // 通过调用dirent_info_lock获取元组项
         let vec = self
             .inner
             .dirent_info_lock(
@@ -550,9 +551,16 @@ impl File for OSInode {
                 count / core::mem::size_of::<Dirent>(),
             )
             .unwrap();
+        if vec.is_empty() {
+            println!("[kernel] empty now");
+        }
+        // 获取最后一个目录项的偏移量
+        // fat32下并不是一次性获取完，而是分很多次
         if let Some((_, next_offset, _, _)) = vec.last() {
             *offset = *next_offset;
         }
+        println!("[kernel] current offset2: {:?}", *offset);
+        // 迭代vec来获取需要的目录项
         vec.iter()
             .map(|(name, offset, first_clus, type_)| {
                 let d_type = match type_ {
@@ -610,6 +618,7 @@ impl File for OSInode {
         }
     }
     fn get_single_cache(&self, offset: usize) -> Result<Arc<Mutex<PageCache>>, ()> {
+        // 确保偏移量4KB对齐
         if offset & 0xfff != 0 {
             return Err(());
         }

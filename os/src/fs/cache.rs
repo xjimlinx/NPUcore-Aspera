@@ -9,31 +9,37 @@ use spin::Mutex;
 use super::BlockDevice;
 
 pub trait Cache {
-    /// The read-only mapper to the block cache
-    /// # Argument
-    /// + `offset`: offset in cache
+    /// 返回块缓存的只读映射
+    /// # 参数
+    /// + `offset`: cache 内偏移量
     /// + `f`: a closure to read
     fn read<T, V>(&self, offset: usize, f: impl FnOnce(&T) -> V) -> V;
-    /// The mutable mapper to the block cache
+    /// 返回块缓存的可变映射
     /// # Argument
-    /// + `offset`: offset in cache
+    /// + `offset`: cache 内的偏移量
     /// + `f`: a closure to write
     fn modify<T, V>(&mut self, offset: usize, f: impl FnOnce(&mut T) -> V) -> V;
     /// Tell cache to write back
-    /// # Argument
-    /// + `block_ids`: block ids in this cache
-    /// + `block_device`: The pointer to the block_device.
+    /// 写回
+    /// # 参数
+    /// + `block_ids`: cache内的块号
+    /// + `block_device`: 块设备对象
     fn sync(&self, _block_ids: Vec<usize>, _block_device: &Arc<dyn BlockDevice>) {}
 }
 
+/// 优先级上限
 const PRIORITY_UPPERBOUND: usize = 1;
+/// buffer大小
 const BUFFER_SIZE: usize = BLOCK_SZ;
+/// 页缓存数量（每页包含块数量）
 const PAGE_BUFFERS: usize = PAGE_SIZE / BUFFER_SIZE;
 
 #[cfg(not(feature = "la64"))]
 const BUFFER_CACHE_NUM: usize = 16;
 
+/// 缓存池大小
 const CACHEPOOLSIZE: usize = BUFFER_CACHE_NUM >> (BLOCK_SZ / 512).trailing_zeros();
+/// 缓存池
 const CACHEPOOLPAGE: usize = if (CACHEPOOLSIZE >> 3) > 1 {
     CACHEPOOLSIZE >> 3
 } else {
@@ -187,13 +193,15 @@ impl BlockCacheManager {
     }
 }
 
-/// PageCache is used for kernel.
+/// PageCache 用于内核
+/// PAGE_SIZE 为 4096
+/// 也就是说每个PageCache内部的页大小为4096字节
 /// Each PageCache contains PAGE_BUFFERS(8) BufferCache.
 pub struct PageCache {
-    /// Priority is used for out of memory
-    /// Every time kernel tried to alloc this pagecache this number will increase 1(at most 1)
-    /// Every time out of memory occurred this number will decrease 1(at least 0)
-    /// When it's 0 and Arc's strong count is 1(one in inode) this PageCache will be dropped
+    /// 优先级用于内存不足的情况（oom）
+    /// 每次内核尝试分配这个页的时候，这个数字（优先级）会增加1,并且最多为1
+    /// 每次发生oom的情况，这个数字（优先级）会减少1，并且至少为0
+    /// 当其变为0的时候，并且Arc的强引用数量为1（one in inode），这个PageCache会被释放
     priority: usize,
     page_ptr: &'static mut [u8; PAGE_SIZE],
     tracker: Arc<FrameTracker>,
@@ -253,31 +261,59 @@ impl PageCache {
     pub fn get_tracker(&self) -> Arc<FrameTracker> {
         self.tracker.clone()
     }
+
+    /// 读取一个缓存
+    /// # 参数
+    /// + block_id：块号
+    /// + block_device：块设备对象
     pub fn read_in(&mut self, block_ids: Vec<usize>, block_device: &Arc<dyn BlockDevice>) {
+        // 如果传入块号列表为空，则去需任何操作，直接返回
         if block_ids.is_empty() {
             return;
         }
+        // 块号数量限制，若块号长度大于PAGE_BUFFERS，越界panic
+        // PAGE_BUFFERS 大小为 2
+        // 也就是每页只有两块
         assert!(block_ids.len() <= PAGE_BUFFERS);
 
+        // 初始化变量
+        // 当前连续块序列的起始块号
         let mut start_block_id = usize::MAX;
+        // 当前连续块序列的长度
         let mut con_length = 0;
+        // 缓存起始位置索引，用于计算写入的位置
         let mut start_buf_id = 0;
+        // 遍历块号列表
         for block_id in block_ids.iter() {
+            // 如果当前没有连续块序列
+            // 初始化start_block_id以及con_length
             if con_length == 0 {
+                // 获取起始块号
                 start_block_id = *block_id;
+                // 连续块数量设置为1
                 con_length = 1;
             } else if *block_id != start_block_id + con_length {
+                // 若当前块号不属于当前连续序列，处理已经累积的连续块
+                // （实际上连续块最多就两个，也就是一页里面最多两个连续块）
                 let buf = unsafe {
                     core::slice::from_raw_parts_mut(
+                        // 从缓存页面的起始指针加上指针偏移量
+                        // 也就是 start_buf_id * BUFFER_SIZE
+                        // 计算写入位置
                         self.page_ptr.as_mut_ptr().add(start_buf_id * BUFFER_SIZE),
+                        // 长度为连续块长度(或者说数量) * BUFFER_SIZE(块大小)
                         con_length * BUFFER_SIZE,
                     )
                 };
+                // 块设备读取数据，存入buf
                 block_device.read_block(start_block_id, buf);
+                // 更新起始位置索引、起始块号以及连续块长度
                 start_buf_id += con_length;
                 start_block_id = *block_id;
                 con_length = 1;
             } else {
+                // 若当前块号属于当前连续序列
+                // 延长连续序列长度
                 con_length += 1;
             }
         }
@@ -295,11 +331,17 @@ impl PageCache {
             .unwrap();
     }
 
+    /// 写回
+    /// # 参数
+    /// + block_ids: 块号
+    /// + block_device: 块设备对象
     pub fn write_back(&self, block_ids: Vec<usize>, block_device: &Arc<dyn BlockDevice>) {
+        // 如果块号为空，直接返回
         if block_ids.is_empty() {
             return;
         }
 
+        // 获取起始块号
         let mut start_block_id = usize::MAX;
         let mut con_length = 0;
         let mut start_buf_id = 0;
@@ -334,7 +376,9 @@ impl PageCache {
 }
 
 pub struct PageCacheManager {
+    /// 缓存池
     cache_pool: Mutex<Vec<Option<Arc<Mutex<PageCache>>>>>,
+    /// 已经分配的缓存
     allocated_cache: Mutex<Vec<usize>>,
 }
 
@@ -364,6 +408,13 @@ impl PageCacheManager {
         page_cache
     }
 
+    /// 获取缓存
+    /// # 参数
+    /// + inner_cache_id: cache内块号
+    /// + neighbor: 闭包，返回一组邻近的块号
+    /// + block_device: 块设备对象
+    /// # 返回值
+    /// + 返回一个PageCache对象
     pub fn get_cache<FUNC>(
         &self,
         inner_cache_id: usize,
@@ -373,27 +424,45 @@ impl PageCacheManager {
     where
         FUNC: Fn() -> Vec<usize>,
     {
+        // 预留至少一个内存帧
         crate::mm::frame_reserve(1);
+        // 获取缓存池
         let mut lock = self.cache_pool.lock();
+        // 确保缓存池大小足够
+        // 当inner_cache_id 超出cache_pool长度时
+        // 添加None扩展缓存池的长度
         while inner_cache_id >= lock.len() {
             lock.push(None);
         }
+        // 获取/创建缓存
         let page_cache = match &lock[inner_cache_id] {
+            // 如果cache_pool[inner_cache_id]存在条目，直接克隆返回
             Some(page_cache) => page_cache.clone(),
+            // 否则，创建缓存
             None => {
+                // 构造新的缓存对象
                 let mut new_page_cache = PageCache::new();
+                // 关键步骤：从块设备对象加载数据，块号由neighbor闭包提供
                 new_page_cache.read_in(neighbor(), &block_device);
+                // 包装成线程安全对象
                 let new_page_cache = Arc::new(Mutex::new(new_page_cache));
+                // 将缓存池存入池中
                 lock[inner_cache_id] = Some(new_page_cache.clone());
+                // 记录分配过的缓存
                 self.allocated_cache.lock().push(inner_cache_id);
                 new_page_cache
             }
         };
+        // 锁定PageCache
         let mut inner_lock = page_cache.lock();
+        // 检查优先级
+        // 若低于上限，+1,否则不操作
         if inner_lock.priority < PRIORITY_UPPERBOUND {
             inner_lock.priority += 1;
         }
+        // 释放锁
         drop(inner_lock);
+        // 返回缓存
         page_cache
     }
 

@@ -676,7 +676,6 @@ fn init_device_directory() {
 
     println!("[kernel] /dev init Successfully!");
 
-    println!("[kernel] {:?}", dev_inode.name);
     dev_inode.mkdir("shm");
     dev_inode.mkdir("misc");
 
@@ -739,16 +738,20 @@ fn init_tmp_directory() {
     match ROOT.mkdir("/tmp") {
         _ => {}
     }
+    println!("[kernel] init_tmp_directory successfully!");
 }
 // 初始化进程目录
 fn init_proc_directory() {
     match ROOT.mkdir("/proc") {
         _ => {}
     }
+    println!("[kernel] init_proc_directory successfully!");
     match ROOT.open("/proc/meminfo", OpenFlags::O_CREAT, false) {
         _ => {}
     }
+    println!("[kernel] init_proc_meminfo_directory successfully!");
     match ROOT.open("/proc/mounts", OpenFlags::O_CREAT, false) {
         _ => {}
     }
+    println!("[kernel] init_proc_mounts_directory successfully!");
 }

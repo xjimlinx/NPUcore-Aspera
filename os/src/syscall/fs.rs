@@ -12,6 +12,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::size_of;
+use core::panic;
 use log::{debug, info, trace, warn};
 use num_enum::FromPrimitive;
 
@@ -20,7 +21,14 @@ use super::errno::*;
 pub const AT_FDCWD: usize = 100usize.wrapping_neg();
 
 // todo
-pub fn sys_splice(fd_in: usize, off_in: *mut usize, fd_out: usize, off_out: *mut usize, len: usize, _flags: u32) -> isize {
+pub fn sys_splice(
+    fd_in: usize,
+    off_in: *mut usize,
+    fd_out: usize,
+    off_out: *mut usize,
+    len: usize,
+    _flags: u32,
+) -> isize {
     let task = current_task().unwrap();
     let fd_table = task.files.lock();
     let in_file = match fd_table.get_ref(fd_in) {
@@ -52,7 +60,7 @@ pub fn sys_splice(fd_in: usize, off_in: *mut usize, fd_out: usize, off_out: *mut
                     return EINVAL;
                 };
                 offset as *mut usize
-            },
+            }
             Err(errno) => return errno,
         }
     };
@@ -65,71 +73,69 @@ pub fn sys_splice(fd_in: usize, off_in: *mut usize, fd_out: usize, off_out: *mut
                     return EINVAL;
                 };
                 offset as *mut usize
-            },
+            }
             Err(errno) => return errno,
         }
     };
 
-        let mut left_bytes = len;
-        loop {
-            let write_buffer = match buffer_ptr {
-                Some(buffer_ptr) => buffer_ptr,
-                None => {
-                    unsafe {
-                        buffer.set_len(left_bytes.min(BUFFER_SIZE));
-                    }
-                    let read_size = in_file.read(unsafe { off_in.as_mut() }, buffer.as_mut_slice());
-                    if (read_size as isize) < 0 {
-                        let errno = read_size as isize;
-                        return errno;
-                    } else if read_size == 0 {
-                        break;
-                    }
-                    unsafe {
-                        buffer.set_len(read_size);
-                    }
-                    buffer.as_slice()
+    let mut left_bytes = len;
+    loop {
+        let write_buffer = match buffer_ptr {
+            Some(buffer_ptr) => buffer_ptr,
+            None => {
+                unsafe {
+                    buffer.set_len(left_bytes.min(BUFFER_SIZE));
                 }
-            };
+                let read_size = in_file.read(unsafe { off_in.as_mut() }, buffer.as_mut_slice());
+                if (read_size as isize) < 0 {
+                    let errno = read_size as isize;
+                    return errno;
+                } else if read_size == 0 {
+                    break;
+                }
+                unsafe {
+                    buffer.set_len(read_size);
+                }
+                buffer.as_slice()
+            }
+        };
 
-            let read_size = write_buffer.len();
+        let read_size = write_buffer.len();
 
-            // let fallback = |redundant_bytes: usize| unsafe {
-            //     let offset = offset.as_mut();
-            //     match offset {
-            //         Some(offset) => {
-            //             *offset -= redundant_bytes;
-            //         }
-            //         None => match in_file.lseek(-(redundant_bytes as isize), SeekWhence::SEEK_CUR) {
-            //             Ok(_) => {}
-            //             Err(errno) => panic!("failed! errno {}", errno),
-            //         },
-            //     }
-            // };
+        // let fallback = |redundant_bytes: usize| unsafe {
+        //     let offset = offset.as_mut();
+        //     match offset {
+        //         Some(offset) => {
+        //             *offset -= redundant_bytes;
+        //         }
+        //         None => match in_file.lseek(-(redundant_bytes as isize), SeekWhence::SEEK_CUR) {
+        //             Ok(_) => {}
+        //             Err(errno) => panic!("failed! errno {}", errno),
+        //         },
+        //     }
+        // };
 
-            let write_size = out_file.write(unsafe { off_out.as_mut() }, write_buffer);
-            if (write_size as isize) < 0 {
-                // fallback(read_size);
-                let errno = read_size as isize;
-                return errno;
-            } else if write_size == 0 {
-                // fallback(read_size);
-                break;
-            } 
-
-            buffer_ptr = if write_size < read_size {
-                Some(&write_buffer[write_size..])
-            } else {
-                None
-            };
-            left_bytes -= write_size;
+        let write_size = out_file.write(unsafe { off_out.as_mut() }, write_buffer);
+        if (write_size as isize) < 0 {
+            // fallback(read_size);
+            let errno = read_size as isize;
+            return errno;
+        } else if write_size == 0 {
+            // fallback(read_size);
+            break;
         }
-        let send_size = len - left_bytes;
-        info!("[sys_sendfile] send bytes: {}", send_size);
-        send_size as isize
 
+        buffer_ptr = if write_size < read_size {
+            Some(&write_buffer[write_size..])
+        } else {
+            None
+        };
+        left_bytes -= write_size;
+    }
+    let send_size = len - left_bytes;
+    info!("[sys_sendfile] send bytes: {}", send_size);
+    send_size as isize
 }
-
 
 /// # Warning
 /// `fs` & `files` is locked in this function

@@ -34,7 +34,7 @@ pub struct Ext4FileSystem {
     // /// Inode表的起始块号
     // pub inode_table_start_block: u32,
     /// 缓存管理器
-    pub cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+    pub cache_mgr: Arc<Mutex<BlockCacheManager>>,
 }
 
 impl Ext4FileSystem {
@@ -44,6 +44,7 @@ impl Ext4FileSystem {
         todo!()
     }
     // Opens and loads an Ext4 from the `block_device`.
+    // 针对ext4rs原有的方法的方法，可能需要修改
     pub fn open_ext4rs(
         block_device: Arc<dyn BlockDevice>,
         index_cache_mgr: Arc<Mutex<BlockCacheManager>>,
@@ -165,7 +166,7 @@ impl Ext4FileSystem {
     }
     pub fn open_old(
         block_device: Arc<dyn BlockDevice>,
-        index_cache_mgr: Arc<spin::Mutex<BlockCacheManager>>,
+        index_cache_mgr: Arc<Mutex<BlockCacheManager>>,
     ) -> Arc<Self> {
         // 块缓存管理器
         // 读取的数据会被缓存，也就是说放在内存中
@@ -270,10 +271,10 @@ impl Ext4FileSystem {
         self.print_block_group(3);
         // 尝试比较超级块内容
         assert!(self.superblock == Ext4FileSystem::get_superblock_test(BLOCK_DEVICE.clone()));
-        self.test_get_file("remove.lua");
-        self.test_get_file("/remove.lua");
-        self.test_get_file("/busybox_cmd.txt");
-        println!("Finish the test");
+        // self.test_get_file("remove.lua");
+        // self.test_get_file("/remove.lua");
+        // self.test_get_file("/busybox_cmd.txt");
+        // println!("Finish the test");
     }
 }
 

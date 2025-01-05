@@ -2,7 +2,11 @@ use core::cmp::min;
 use core::mem::size_of;
 use core::panic;
 
+use alloc::string::String;
 use alloc::{sync::Arc, vec::Vec};
+use spin::{Mutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+use crate::fs::inode::{InodeLock, InodeTime};
+use crate::fs::DiskInodeType;
 use crate::fs::{inode::InodeTrait, vfs::VFS};
 
 use super::*;
@@ -11,7 +15,6 @@ use super::{
     block_group::{Block, Ext4BlockGroup},
     crc::{ext4_crc32c, EXT4_CRC32_INIT},
     direntry::DirEntryType,
-    error::Errno,
     ext4fs::Ext4FileSystem,
     extent::{Ext4Extent, Ext4ExtentHeader, Ext4ExtentIndex},
     superblock::Ext4Superblock,
@@ -351,9 +354,23 @@ impl Ext4Inode {
 }
 
 #[derive(Clone, Debug)]
+/// Ext4Inode封装对象
+/// + 含有inode号和inode
 pub struct Ext4InodeRef {
     pub inode_num: u32,
     pub inode: Ext4Inode,
+}
+
+impl Ext4InodeRef {
+    pub fn set_atime(&mut self, atime: u32) {
+        self.inode.set_atime(atime);
+    }
+    pub fn set_mtime(&mut self, mtime: u32) {
+        self.inode.set_mtime(mtime);
+    }
+    pub fn set_ctime(&mut self, ctime: u32) {
+        self.inode.set_ctime(ctime);
+    }
 }
 
 impl Ext4Inode {
@@ -518,19 +535,19 @@ impl Ext4Inode {
 
 #[allow(unused)]
 impl InodeTrait for Ext4Inode {
-    fn read(&self) -> spin::RwLockReadGuard<crate::fs::inode::InodeLock> {
+    fn read(&self) -> RwLockReadGuard<InodeLock> {
         todo!()
     }
 
-    fn write(&self) -> spin::RwLockWriteGuard<crate::fs::inode::InodeLock> {
+    fn write(&self) -> RwLockWriteGuard<InodeLock> {
         todo!()
     }
 
-    fn get_file_type_lock(&self) -> spin::MutexGuard<crate::fs::DiskInodeType> {
+    fn get_file_type_lock(&self) -> MutexGuard<DiskInodeType> {
         todo!()
     }
 
-    fn get_file_type(&self) -> crate::fs::DiskInodeType {
+    fn get_file_type(&self) -> DiskInodeType {
         // todo!()
         let file_type = self.file_type();
         // println!("[kernel ext4inode file type] current inode is {:?}", self);
@@ -548,19 +565,19 @@ impl InodeTrait for Ext4Inode {
     }
 
     fn get_file_size(&self) -> u32 {
-        todo!()
+        self.size() as u32
     }
 
     fn get_file_size_rlock(
         &self,
-        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
     ) -> u32 {
         todo!()
     }
 
     fn get_file_size_wlock(
         &self,
-        _inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
     ) -> u32 {
         todo!()
     }
@@ -575,14 +592,14 @@ impl InodeTrait for Ext4Inode {
 
     fn get_inode_num_lock(
         &self,
-        lock: &spin::RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>,
+        lock: &RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>,
     ) -> Option<u32> {
         todo!()
     }
 
     fn get_block_id(
         &self,
-        lock: &spin::RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>,
+        lock: &RwLockReadGuard<crate::fs::fat32::fat_inode::FileContent>,
         inner_cache_id: u32,
     ) -> Option<u32> {
         todo!()
@@ -590,7 +607,7 @@ impl InodeTrait for Ext4Inode {
 
     fn read_at_block_cache_rlock(
         &self,
-        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
         offset: usize,
         buf: &mut [u8],
     ) -> usize {
@@ -599,7 +616,7 @@ impl InodeTrait for Ext4Inode {
 
     fn read_at_block_cache_wlock(
         &self,
-        _inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
         offset: usize,
         buf: &mut [u8],
     ) -> usize {
@@ -612,7 +629,7 @@ impl InodeTrait for Ext4Inode {
 
     fn write_at_block_cache_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
         offset: usize,
         buf: &[u8],
     ) -> usize {
@@ -626,27 +643,27 @@ impl InodeTrait for Ext4Inode {
     fn get_single_cache(
         &self,
         inner_cache_id: usize,
-    ) -> alloc::sync::Arc<spin::Mutex<super::PageCache>> {
+    ) -> Arc<Mutex<PageCache>> {
         todo!()
     }
 
     fn get_single_cache_lock(
         &self,
-        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
         inner_cache_id: usize,
-    ) -> alloc::sync::Arc<spin::Mutex<super::PageCache>> {
+    ) -> Arc<Mutex<PageCache>> {
         todo!()
     }
 
-    fn get_all_cache(&self) -> alloc::vec::Vec<alloc::sync::Arc<spin::Mutex<super::PageCache>>> {
+    fn get_all_cache(&self) -> Vec<Arc<Mutex<PageCache>>> {
         todo!()
     }
 
     fn get_all_files_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-    ) -> alloc::vec::Vec<(
-        alloc::string::String,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+    ) -> Vec<(
+        String,
         crate::fs::fat32::layout::FATShortDirEnt,
         u32,
     )> {
@@ -655,12 +672,12 @@ impl InodeTrait for Ext4Inode {
 
     fn dirent_info_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
         offset: u32,
         length: usize,
     ) -> Result<
-        alloc::vec::Vec<(
-            alloc::string::String,
+        Vec<(
+            String,
             usize,
             u64,
             crate::fs::fat32::layout::FATDiskInodeType,
@@ -676,7 +693,7 @@ impl InodeTrait for Ext4Inode {
 
     fn unlink_lock(
         &self,
-        _inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockWriteGuard<InodeLock>,
         delete: bool,
     ) -> Result<(), isize> {
         todo!()
@@ -684,12 +701,12 @@ impl InodeTrait for Ext4Inode {
 
     fn stat_lock(
         &self,
-        _inode_lock: &spin::RwLockReadGuard<crate::fs::inode::InodeLock>,
+        _inode_lock: &RwLockReadGuard<InodeLock>,
     ) -> (i64, i64, i64, i64, u64) {
         todo!()
     }
 
-    fn time(&self) -> spin::MutexGuard<crate::fs::inode::InodeTime> {
+    fn time(&self) -> MutexGuard<InodeTime> {
         todo!()
     }
 
@@ -699,7 +716,7 @@ impl InodeTrait for Ext4Inode {
 
     fn modify_size_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
         diff: isize,
         clear: bool,
     ) {
@@ -708,26 +725,26 @@ impl InodeTrait for Ext4Inode {
 
     fn is_empty_dir_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
     ) -> bool {
         todo!()
     }
 
     fn from_ent(
         &self,
-        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
+        parent_dir: &Arc<dyn InodeTrait>,
         ent: &crate::fs::fat32::layout::FATShortDirEnt,
         offset: u32,
-    ) -> alloc::sync::Arc<dyn InodeTrait> {
+    ) -> Arc<dyn InodeTrait> {
         todo!()
     }
 
     fn link_par_lock(
         &self,
-        inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
-        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        name: alloc::string::String,
+        inode_lock: &RwLockWriteGuard<InodeLock>,
+        parent_dir: &Arc<dyn InodeTrait>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
     ) -> Result<(), ()>
     where
         Self: Sized,
@@ -737,11 +754,11 @@ impl InodeTrait for Ext4Inode {
     #[allow(unused)]
     fn create_lock(
         &self,
-        parent_dir: &alloc::sync::Arc<dyn InodeTrait>,
-        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        name: alloc::string::String,
-        file_type: crate::fs::DiskInodeType,
-    ) -> Result<alloc::sync::Arc<dyn InodeTrait>, ()>
+        parent_dir: &Arc<dyn InodeTrait>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: String,
+        file_type: DiskInodeType,
+    ) -> Result<Arc<dyn InodeTrait>, ()>
     where
         Self: Sized,
     {
@@ -749,9 +766,9 @@ impl InodeTrait for Ext4Inode {
     }
 
     fn gen_short_name_slice(
-        parent_dir: &alloc::sync::Arc<Self>,
-        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        name: &alloc::string::String,
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
     ) -> [u8; 11]
     where
         Self: Sized,
@@ -760,17 +777,17 @@ impl InodeTrait for Ext4Inode {
     }
 
     fn gen_name_slice(
-        parent_dir: &alloc::sync::Arc<Self>,
-        parent_inode_lock: &spin::RwLockWriteGuard<crate::fs::inode::InodeLock>,
-        name: &alloc::string::String,
-    ) -> ([u8; 11], alloc::vec::Vec<[u16; 13]>)
+        parent_dir: &Arc<Self>,
+        parent_inode_lock: &RwLockWriteGuard<InodeLock>,
+        name: &String,
+    ) -> ([u8; 11], Vec<[u16; 13]>)
     where
         Self: Sized,
     {
         todo!()
     }
 
-    fn gen_long_name_slice(name: &alloc::string::String, long_ent_index: usize) -> [u16; 13]
+    fn gen_long_name_slice(name: &String, long_ent_index: usize) -> [u16; 13]
     where
         Self: Sized,
     {
@@ -822,16 +839,13 @@ impl Ext4FileSystem {
         offset
     }
 
-    /// Load the inode reference from the disk.
+    /// 从磁盘加载inoderef对象
     pub fn get_inode_ref(&self, inode_num: u32) -> Ext4InodeRef {
         let offset = self.inode_disk_pos(inode_num);
-        println!("[kernel get_inode_ref] offset is {:?}", offset);
 
-        // The problem is happened here
         let mut ext4block = Block::load_offset(self.block_device.clone(), offset);
 
         let blk_offset = offset % BLOCK_SIZE;
-        println!("[kernel get_inode_ref] blk_offset is {:?}", blk_offset);
         let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
 
         Ext4InodeRef {
@@ -840,11 +854,10 @@ impl Ext4FileSystem {
         }
     }
 
-    /// Load the inode reference from the disk.
+    /// 从磁盘加载带Arc包装的inoderef对象
     pub fn get_inode_ref_arc(&self, inode_num: u32) -> Arc<Ext4InodeRef> {
         let offset = self.inode_disk_pos(inode_num);
 
-        // The problem is happened here
         let mut ext4block = Block::load_offset(self.block_device.clone(), offset);
 
         let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
@@ -855,7 +868,7 @@ impl Ext4FileSystem {
         })
     }
 
-    /// write back inode with checksum
+    /// 带校验和回写inode信息
     pub fn write_back_inode(&self, inode_ref: &mut Ext4InodeRef) {
         let inode_pos = self.inode_disk_pos(inode_ref.inode_num);
 
@@ -868,7 +881,7 @@ impl Ext4FileSystem {
             .sync_inode_to_disk(self.block_device.clone(), inode_pos);
     }
 
-    /// write back inode with checksum
+    /// 不带校验和回写inode信息
     pub fn write_back_inode_without_csum(&self, inode_ref: &Ext4InodeRef) {
         let inode_pos = self.inode_disk_pos(inode_ref.inode_num);
         println!("[kernel write_back_inode_without_csum] inode_pos: {:?}, inode_num: {}", inode_pos, inode_ref.inode_num);
@@ -878,14 +891,12 @@ impl Ext4FileSystem {
             .sync_inode_to_disk(self.block_device.clone(), inode_pos);
     }
 
-    /// Get physical block id of a logical block.
-    ///
-    /// Params:
-    /// inode_ref: &Ext4InodeRef - inode reference
-    /// lblock: Ext4Lblk - logical block id
-    ///
-    /// Returns:
-    /// `Result<Ext4Fsblk>` - physical block id
+    /// 获取逻辑块号对应的物理块号
+    /// # 参数
+    /// + inode_ref: &Ext4InodeRef - inode封装对象
+    /// + lblock: Ext4Lblk - 逻辑块号
+    /// # 返回值
+    /// + `Result<Ext4Fsblk>` - 物理块号
     pub fn get_pblock_idx(
         &self,
         inode_ref: &Ext4InodeRef,
@@ -896,17 +907,18 @@ impl Ext4FileSystem {
             // get the last path
             let path = path.path.last().unwrap();
 
-            // get physical block id
+            // 获取物理块号
             let fblock = path.pblock;
 
             return Ok(fblock);
         }
 
         // return_errno_with_message(Errno::EIO, "search extent fail")
-        Err(Errno::EIO as isize)
+        panic!("search extent fail!");
+        // Err(Errno::EIO as isize)
     }
 
-    /// Allocate a new block
+    /// 分配一个新的块
     pub fn allocate_new_block(&self, inode_ref: &mut Ext4InodeRef) -> Result<Ext4Fsblk, isize> {
         let super_block = self.superblock;
         let inodes_per_group = super_block.inodes_per_group();

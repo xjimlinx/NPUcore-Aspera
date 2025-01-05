@@ -509,19 +509,30 @@ pub fn sys_clone(
     new_pid as isize
 }
 
+/// 执行可执行文件
+/// # 参数
+/// + pathname：文件路径
+/// + argv：参数列表
+/// + envp：环境变量列表
 pub fn sys_execve(
     pathname: *const u8,
     mut argv: *const *const u8,
     mut envp: *const *const u8,
 ) -> isize {
+    // 设置默认shell为bash
     const DEFAULT_SHELL: &str = "/bin/bash";
+    // 获取当前进程
     let task = current_task().unwrap();
+    // 获取当前进程的用户态内存访问权限
     let token = task.get_user_token();
+    // 获取可执行文件的路径
     let path = match translated_str(token, pathname) {
         Ok(path) => path,
         Err(errno) => return errno,
     };
+    // 解析参数列表
     let mut argv_vec: Vec<String> = Vec::with_capacity(16);
+    // 解析环境变量列表
     let mut envp_vec: Vec<String> = Vec::with_capacity(16);
     if !argv.is_null() {
         loop {
@@ -566,18 +577,26 @@ pub fn sys_execve(
         envp_vec,
         envp_vec.len()
     );
+    // 获取当前工作目录的文件描述符
     let working_inode = &task.fs.lock().working_inode;
 
     match working_inode.open(&path, OpenFlags::O_RDONLY, false) {
+        // 检查打开的文件
         Ok(file) => {
+            // 若文件大小小于4，则返回ENOEXEC
+            // 即非可执行文件
             if file.get_size() < 4 {
                 return ENOEXEC;
             }
+            // 看前四个字节是否是可执行文件魔数
             let mut magic_number = Box::<[u8; 4]>::new([0; 4]);
             // this operation may be expensive... I'm not sure
             file.read(Some(&mut 0usize), magic_number.as_mut_slice());
             let elf = match magic_number.as_slice() {
+                // ELF可执行文件
                 b"\x7fELF" => file,
+                // 脚本文件
+                // 用默认Shell即bash加载
                 b"#!" => {
                     let shell_file = working_inode
                         .open(DEFAULT_SHELL, OpenFlags::O_RDONLY, false)
@@ -585,6 +604,7 @@ pub fn sys_execve(
                     argv_vec.insert(0, DEFAULT_SHELL.to_string());
                     shell_file
                 }
+                // 非可执行文件
                 _ => return ENOEXEC,
             };
 

@@ -110,7 +110,7 @@ impl Drop for Inode {
     }
 }
 
-/// Constructor
+/// 构造函数
 impl Inode {
     /// Inode 的构造函数
     /// # 参数
@@ -155,7 +155,7 @@ impl Inode {
             deleted: Mutex::new(false),
         });
 
-        // Init hint
+        // 初始化 hint
         if file_type == DiskInodeType::Directory {
             inode.set_hint();
         }
@@ -163,7 +163,7 @@ impl Inode {
     }
 }
 
-/// Basic Funtions
+/// 基本功能
 impl Inode {
     /// 获取第一个簇
     /// # 参数
@@ -172,7 +172,9 @@ impl Inode {
     /// 如果簇列表非空，会返回第一个簇
     /// 否则返回空
     fn get_first_clus_lock(&self, lock: &RwLockReadGuard<FileContent>) -> Option<u32> {
+        // 获取簇列表
         let clus_list = &lock.clus_list;
+        // 非空返回第一个簇号
         if !clus_list.is_empty() {
             Some(clus_list[0])
         } else {
@@ -189,30 +191,60 @@ impl Inode {
         //(size - 1 + clus_sz) / clus_sz
     }
 
-    /// 获取由给定缓存索引表示的块ID列表
+    /// 获取由给定缓存索引表示的块ID(实际存入起始块号)列表
     /// # 参数
     /// + `clus_list`: 簇列表
-    /// + `inner_cache_id`: Index of T's file caches (usually 4096 size per cache)
+    /// + `inner_cache_id`: Index of T's file caches (每个cache有4096字节)
+    /// 即cache的索引
     /// # 返回值
     /// 块号列表
+    /// # 补充说明
+    /// 第一次读这个函数实现（以及调用他的相关函数栈），感觉有点抽象，
+    /// 因为BLOCK_SIZE固定大小为2048B
+    /// 每扇区字节数也固定为2048B，
+    /// 然后一簇扇区数量就为1！！！
+    /// 然后感觉有些数据就没必要处理
+    /// 总之先这样吧，说不定适用于fat扇区数不为2048的情况
+    /// 然后还有另一个问题，
+    /// 就是每次会存两个块（扇区）
+    /// 包含对应的第一个块（扇区）
+    /// 以及第二个块（扇区），即第一个块（扇区）的下一个块（扇区）
     fn get_neighboring_sec(&self, clus_list: &Vec<u32>, inner_cache_id: usize) -> Vec<usize> {
+        // 获取每簇包含扇区数量(实际为1)
         let sec_per_clus = self.fs.sec_per_clus as usize;
+        // 获取每扇区字节数(实际为2048)
         let byts_per_sec = self.fs.byts_per_sec as usize;
+        // 获取每个缓存页面扇区数（实际为2，也就是说每个页面包含两个簇）
         let sec_per_cache = PageCacheManager::CACHE_SZ / byts_per_sec;
+        // 计算当前缓存页面应该读取的第一个扇区编号
         let mut sec_id = inner_cache_id * sec_per_cache;
+        // 初始化用于存储缓存页面需要加载的扇区块号集合
         let mut block_ids = Vec::with_capacity(sec_per_cache);
+        // 遍历页面内每个扇区
         for _ in 0..sec_per_cache {
+            // 计算簇号
+            // 公式为：
+            // 扇区编号 / 每簇扇区数
             let cluster_id = sec_id / sec_per_clus;
+            // 若cluster_id大于等于簇列表长度，则跳出循环
             if cluster_id >= clus_list.len() {
                 break;
             }
+            // 计算簇内偏移量
+            // 公式为：
+            // 扇区编号 % 每簇扇区数
             let offset = sec_id % sec_per_clus;
+            // 获取当前簇的起始（第一个）扇区号
             let start_block_id = self.fs.first_sector_of_cluster(clus_list[cluster_id]) as usize;
+            // 存入块号
             block_ids.push(start_block_id + offset);
+            // 更新扇区id号，进入下一次循环
             sec_id += 1;
         }
+        // 返回块号列表
         block_ids
     }
+
     /// 打开根目录
     /// # 参数
     /// + `efs`: 指向文件系统实例的指针
@@ -881,11 +913,11 @@ impl InodeTrait for Inode {
     fn is_file(&self) -> bool {
         self.get_file_type() == DiskInodeType::File
     }
-    /// Get inode number of inode.
-    /// For convenience, treat the first sector number as the inode number.
-    /// # Arguments
+    /// 获取Inode号
+    /// 方便起见，将第一个扇区号作为inode号
+    /// # 参数
     /// + `lock`: The lock of target file content
-    /// # Return Value
+    /// # 返回值
     /// If cluster list isn't empty, it will return the first sector number.
     /// Otherwise it will return None.
     #[inline(always)]
@@ -944,10 +976,11 @@ impl InodeTrait for Inode {
         let mut read_size = 0;
         loop {
             // calculate end of current block
+            // 计算当前块的结束位置
             let mut end_current_block =
                 (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
             end_current_block = end_current_block.min(end);
-            // read and update read size
+            // 读取并更新读取长度
             let lock = self.file_content.read();
             let block_read_size = end_current_block - start;
             self.file_cache_mgr
@@ -1118,12 +1151,13 @@ impl InodeTrait for Inode {
     }
 
     /// Get a page cache corresponding to `inner_cache_id`.
-    /// # Arguments
-    /// + `inner_cache_id`: The index of inner cache
-    /// # Return Value
-    /// Pointer to page cache
-    /// # Warning
-    /// This function will lock self's `file_content`, may cause deadlock
+    /// 获取一个与inner_cache_id对应的pagecache,
+    /// # 参数
+    /// + `inner_cache_id`: 内部cache的id号
+    /// # 返回值
+    /// 指向PageCache的指针
+    /// # 警告
+    /// 这个函数会将file_content上锁，可能会导致死锁
     fn get_single_cache(&self, inner_cache_id: usize) -> Arc<Mutex<PageCache>> {
         self.get_single_cache_lock(&self.read(), inner_cache_id)
     }
@@ -1139,7 +1173,9 @@ impl InodeTrait for Inode {
         _inode_lock: &RwLockReadGuard<InodeLock>,
         inner_cache_id: usize,
     ) -> Arc<Mutex<PageCache>> {
+        // 上锁，共享只读访问
         let lock = self.file_content.read();
+        // 获取邻近的扇区
         self.file_cache_mgr.get_cache(
             inner_cache_id,
             || -> Vec<usize> { self.get_neighboring_sec(&lock.clus_list, inner_cache_id) },
@@ -1171,17 +1207,18 @@ impl InodeTrait for Inode {
     }
 
     /// Delete the short and the long entry of `self` from `parent_dir`
-    /// # Return Value
-    /// If successful, it will return Ok.
-    /// Otherwise, it will return Error.
-    /// # Warning
-    /// This function will lock self's parent_dir, may cause deadlock
+    /// # 返回值
+    /// 执行成功返回Ok
+    /// 否则返回Err
+    /// # 警告
+    /// 这个函数会给parent_dir上锁，可能会导致死锁
     fn delete_self_dir_ent(&self) -> Result<(), ()> {
         if let Some((par_inode, offset)) = &*self.parent_dir.lock() {
             return par_inode.delete_dir_ent(&par_inode.write(), *offset);
         }
         Err(())
     }
+
     /// Delete the file from the disk,
     /// This file doesn't be removed immediately(dropped)
     /// deallocating both the directory entries (whether long or short),
@@ -1222,12 +1259,13 @@ impl InodeTrait for Inode {
     }
 
     /// Get a dirent information from the `self` at `offset`
-    /// Return `None` if `self` is not a directory.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// + `offset` The offset within the `self` directory.
-    /// + `length` The length of required vector
-    /// # Return value
+    /// 获取`self`目录中的`offset`位置的目录项信息
+    /// 当 self 不是目录时返回 None
+    /// # 参数
+    /// + `inode_lock`: inode 锁
+    /// + `offset` 目录项的起始偏移量（目录项从哪个位置开始读取）
+    /// + `length` 需要读取的目录项长度
+    /// # 返回值
     /// On success, the function returns `Ok(file name, file size, first cluster, file type)`.
     /// On failure, multiple chances exist: either the Vec is empty, or the Result is `Err(())`.
     fn dirent_info_lock(
@@ -1236,26 +1274,37 @@ impl InodeTrait for Inode {
         offset: u32,
         length: usize,
     ) -> Result<Vec<(String, usize, u64, FATDiskInodeType)>, ()> {
+        // 如果文件不是目录，返回错误
         if !self.is_dir() {
             return Err(());
         }
+        // 获取文件大小
         let size = self.get_file_size();
+        // 初始化迭代器
         let mut walker = self
             .dir_iter(inode_lock, None, DirIterMode::Used, FORWARD)
             .walk();
+        // 设置迭代器起始偏移量
         walker.iter.set_iter_offset(offset);
+        // 初始化存储目录项的向量
         let mut v = Vec::with_capacity(length);
 
+        // 读取第一个目录项
         let (mut last_name, mut last_short_ent) = match walker.next() {
             Some(tuple) => tuple,
+            // 若目录为空直接返回空向量
             None => return Ok(v),
         };
+        // 遍历目录项并插入到向量中
         for _ in 0..length {
+            // 计算下一个目录项的偏移量
             let next_dirent_offset =
                 walker.iter.get_offset().unwrap() as usize + core::mem::size_of::<FATDirEnt>();
+            // 获取下一个目录项
             let (name, short_ent) = match walker.next() {
                 Some(tuple) => tuple,
                 None => {
+                    // 插入上一个结果，然后直接返回
                     v.push((
                         last_name,
                         size as usize,
@@ -1265,22 +1314,24 @@ impl InodeTrait for Inode {
                     return Ok(v);
                 }
             };
+            // 插入上一个结果
             v.push((
                 last_name,
                 next_dirent_offset,
                 last_short_ent.get_first_clus() as u64,
                 last_short_ent.attr,
             ));
+            // 更新新的目录项
             last_name = name;
             last_short_ent = short_ent;
         }
         Ok(v)
     }
 
-    /// Return the `stat` structure to `self` file.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
-    /// # Return value
+    /// 获取状态stat结构体
+    /// # 参数
+    /// + `inode_lock`: inode锁
+    /// # 返回值
     /// (file size, access time, modify time, create time, inode number)
     fn stat_lock(&self, _inode_lock: &RwLockReadGuard<InodeLock>) -> (i64, i64, i64, i64, u64) {
         let time = self.time.lock();
@@ -1294,15 +1345,15 @@ impl InodeTrait for Inode {
         )
     }
 
-    /// Return the `time` field of `self`
+    /// 获取 time 字段
     fn time(&self) -> MutexGuard<InodeTime> {
         self.time.lock()
     }
 
-    /// When memory is low, it is called to free its cache
+    /// 当内存不足的时候，调用该函数来释放其缓存
     /// it just tries to lock it's file contents to free memory
-    /// # Return Value
-    /// The number of freed pages
+    /// # 返回值
+    /// oom函数释放掉的页的数量
     fn oom(&self) -> usize {
         let neighbor = |inner_cache_id| {
             self.get_neighboring_sec(&self.file_content.read().clus_list, inner_cache_id)
@@ -1310,12 +1361,12 @@ impl InodeTrait for Inode {
         self.file_cache_mgr.oom(neighbor, &self.fs.block_device)
     }
 
-    /// Change the size of current file.
+    /// 改变当前文件的大小
     /// This operation is ignored if the result size is negative
-    /// # Arguments
+    /// # 参数
     /// + `inode_lock`: The lock of inode
     /// + `diff`: The change in file size
-    /// # Warning
+    /// # 警告
     /// This function will not modify its parent directory (since we changed the size of the current file),
     /// we will modify it when it is deleted.
     fn modify_size_lock(&self, inode_lock: &RwLockWriteGuard<InodeLock>, diff: isize, clear: bool) {

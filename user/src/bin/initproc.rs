@@ -29,7 +29,8 @@ fn main() -> i32 {
         core::ptr::null(),
     ];
     let mut exit_code: i32 = 0;
-    sleep(10000);
+    // xein changed this line to comment
+    // sleep(10000);
     let pid = fork();
     if pid == 0 {
         // 只启动bash

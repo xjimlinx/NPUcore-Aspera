@@ -23,14 +23,14 @@ bitflags! {
     }
 }
 
-/// Directory entry structure.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
+/// 目录项结构体
 pub struct Ext4DirEntry {
     pub inode: u32,               // 该目录项指向的inode的编号
     pub entry_len: u16,           // 到下一个目录项的距离
     pub name_len: u8,             // 低8位的文件名长度
-    pub inner: Ext4DirEnInternal, // 联合体成员
+    pub inner: Ext4DirEnInternal, // Union体成员
     pub name: [u8; 255],          // 文件名
 }
 
@@ -230,6 +230,9 @@ impl Ext4DirEntry {
             core::ptr::copy_nonoverlapping(de_ptr, array_ptr.add(offset), count);
         }
     }
+}
+
+impl Ext4DirEntry {
 }
 
 impl Ext4DirEntryTail {

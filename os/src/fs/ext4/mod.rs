@@ -55,7 +55,9 @@ pub const BLOCK_SIZE: usize = 2048;
 pub const EXT4_SUPERBLOCK_OFFSET_ON_WHEN_BLOCK_SIZE_2048: usize = 1024;
 pub const SUPERBLOCK_OFFSET: usize = 1024;
 
+/// 逻辑块号
 pub type Ext4Lblk = u32;
+/// 物理块号
 pub type Ext4Fsblk = u64;
 
 // Extent相关的常量

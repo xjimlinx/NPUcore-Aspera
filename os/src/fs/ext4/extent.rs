@@ -79,8 +79,8 @@ pub enum NodeData {
 /// Search path in the extent tree.
 #[derive(Clone, Debug)]
 pub struct SearchPath {
-    pub depth: u16,                // current depth
-    pub maxdepth: u16,             // max depth
+    pub depth: u16,                // 当前深度
+    pub maxdepth: u16,             // 最大深度
     pub path: Vec<ExtentPathNode>, // search result of each level
 }
 
@@ -92,7 +92,7 @@ pub struct ExtentPathNode {
     pub extent: Option<Ext4Extent>,     // same reason as above
     pub position: usize,                // position of search result in the node
     pub pblock: u64,                    // physical block of search result
-    pub pblock_of_node: usize,          // physical block of this node
+    pub pblock_of_node: usize,          // 当前节点物理块号
 }
 
 /// load methods for Ext4ExtentHeader
@@ -246,7 +246,7 @@ impl ExtentNode {
 impl ExtentNode {
     /// Binary search for the extent that contains the given block.
     pub fn binsearch_extent(&mut self, lblock: Ext4Lblk) -> Option<(Ext4Extent, usize)> {
-        // empty node
+        // 空节点
         if self.header.entries_count == 0 {
             match &self.data {
                 NodeData::Root(root_data) => {
@@ -541,15 +541,15 @@ impl SearchPath {
 impl Ext4FileSystem {
     /// Find an extent in the extent tree.
     ///
-    /// Params:
-    /// inode_ref: &Ext4InodeRef - inode reference
-    /// lblock: Ext4Lblk - logical block id
+    /// # 参数
+    /// + inode_ref: &Ext4InodeRef - inode reference
+    /// + lblock: Ext4Lblk - logical block id
     ///
-    /// Returns:
-    /// `Result<SearchPath>` - search path
-    ///
-    /// 如果 depth > 0，则查找extent_index，查找目标 lblock 对应的 extent。
-    /// 如果 depth = 0，则直接在root节点中查找 extent，查找目标 lblock 对应的 extent。
+    /// # 返回值
+    /// + `Result<SearchPath>` - search path
+    /// # 说明
+    /// + 如果 depth > 0，则查找extent_index，查找目标 lblock 对应的 extent。
+    /// + 如果 depth = 0，则直接在root节点中查找 extent，查找目标 lblock 对应的 extent。
     pub fn find_extent(
         &self,
         inode_ref: &Ext4InodeRef,
@@ -602,7 +602,8 @@ impl Ext4FileSystem {
                 index: None,
                 extent: Some(extent),
                 position: pos,
-                pblock: extent.get_pblock(),
+                // pblock: extent.get_pblock(),
+                pblock: lblock as u64 - extent.get_first_block() as u64 + extent.get_pblock(),
                 pblock_of_node: pblock_of_node,
             });
             search_path.maxdepth = node.header.depth;
