@@ -4,7 +4,11 @@ use crate::{
     fs::{
         directory_tree::DirectoryTreeNode,
         dirent::Dirent,
-        ext4::{direntry::DirEntryType, InodeFileType, PageCache, BLOCK_SIZE},
+        ext4::{
+            block_group::Block,
+            direntry::{DirEntryType, Ext4DirEntryTail},
+            InodeFileType, PageCache, BLOCK_SIZE,
+        },
         file_trait::File,
         inode::{InodeLock, InodeTrait},
         vfs::VFS,
@@ -434,7 +438,11 @@ impl File for Ext4OSInode {
         todo!()
     }
 
-    // 获取目录项
+    /// 获取目录项
+    /// # 参数
+    /// + count：要获取的目录项数量
+    /// # 返回值
+    /// + 获取到的目录项数组/向量
     fn get_dirent(&self, count: usize) -> Vec<Dirent> {
         const DT_UNKNOWN: u8 = 0;
         const DT_DIR: u8 = 4;
@@ -451,9 +459,9 @@ impl File for Ext4OSInode {
             offset,
             count
         );
-        println!("[kernel] current offset1:{:?}", *offset);
-
         let vec = self.ext4fs.dir_get_entries(self.inode.inode_num);
+
+        let old_offset = *offset;
 
         // fat32下分多次进入get_dirent
         // ext4下要如何处理？
@@ -462,10 +470,16 @@ impl File for Ext4OSInode {
         if let Some(ext4entry) = vec.last() {
             *offset = ext4entry.entry_len as usize;
         }
-        println!("[kernel] current offset2:{:?}", *offset);
+        // println!("[kernel] current offset2:{:?}", *offset);
+
+        if old_offset == *offset {
+            // 返回一个空的Vec数组
+            return Vec::new();
+        }
 
         // 此处的offset需要处理
-        let result = vec.iter()
+        let result = vec
+            .iter()
             .map(|ext4entry| {
                 let d_type = match DirEntryType::from_bits(ext4entry.get_de_type()) {
                     // TODO:
@@ -543,10 +557,6 @@ impl File for Ext4OSInode {
     /// 获取所有缓存页
     /// 通过调用get_single_cache实现
     fn get_all_caches(&self) -> Result<Vec<Arc<Mutex<PageCache>>>, ()> {
-        println!(
-            "[kernel in get_all_caches] current fucking Inoderef is {:?}",
-            self.inode
-        );
         let inode_lock = self.inode_lock.read();
         // 参照fat_inode的get_all_cache，这里需要获取文件的大小，
         // 然后获取文件对应的缓存块（页）数量，
@@ -608,7 +618,6 @@ impl Ext4OSInode {
         let file_size = self.inode.inode.size() as usize;
         // 获取所占数据块数
         let blk_cnts = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        // println!("[kernel in get_neighboring_blk] the blk_cnts: {} blk_id:{}", blk_cnts, blk_id);
         for _ in 0..blk_per_cache {
             if blk_id >= blk_cnts {
                 println!(
@@ -626,10 +635,6 @@ impl Ext4OSInode {
             block_ids.push(start_block_id as usize);
             blk_id += 1;
         }
-        println!(
-            "[kernel in get_neighboring_blk] block_ids is {:?}",
-            block_ids
-        );
         block_ids
     }
 

@@ -170,10 +170,16 @@ impl FileDescriptor {
         let new_abs_path = [new_inode.get_cwd(), new_path.to_string()].join("/");
         DirectoryTreeNode::rename(&old_abs_path, &new_abs_path)
     }
+
+    /// 获取目录项数组
+    /// # 参数
+    /// + count：要获取的目录项数量
     pub fn get_dirent(&self, count: usize) -> Result<Vec<Dirent>, isize> {
+        // 非目录，没有目录项，直接返回
         if !self.file.is_dir() {
             return Err(ENOTDIR);
         }
+        // 调用file的get_dirent方法
         Ok(self.file.get_dirent(count))
     }
     pub fn get_offset(&self) -> usize {

@@ -565,10 +565,21 @@ pub fn sys_pipe2(pipefd: usize, flags: u32) -> isize {
     SUCCESS
 }
 
+/// 系统调用sys_getdents64
+/// # 说明
+/// + 用于获取目录项
+/// # 参数
+/// + fd：文件描述符
+/// + dirp：用于存储获取到的目录项的指针
+/// + count：要获取的目录项的数量
+/// # 返回值
+/// + 成功：返回获取的目录项数量
+/// + 失败：返回错误码
 pub fn sys_getdents64(fd: usize, dirp: *mut u8, count: usize) -> isize {
     let task = current_task().unwrap();
     let token = task.get_user_token();
 
+    // 获取文件描述符
     let file_descriptor = match fd {
         AT_FDCWD => task.fs.lock().working_inode.as_ref().clone(),
         fd => {
@@ -579,10 +590,12 @@ pub fn sys_getdents64(fd: usize, dirp: *mut u8, count: usize) -> isize {
             }
         }
     };
+    // 获取目录项向量
     let dirent_vec = match file_descriptor.get_dirent(count) {
         Ok(vec) => vec,
         Err(errno) => return errno,
     };
+    // 将结果复制到用户态的数组中
     if copy_to_user_array(
         token,
         dirent_vec.as_ptr(),
@@ -595,6 +608,7 @@ pub fn sys_getdents64(fd: usize, dirp: *mut u8, count: usize) -> isize {
         return EFAULT;
     };
     info!("[sys_getdents64] fd: {}, count: {}", fd, count);
+    // 返回获取的目录项数量
     (dirent_vec.len() * size_of::<Dirent>()) as isize
 }
 

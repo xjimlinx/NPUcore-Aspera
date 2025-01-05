@@ -523,6 +523,10 @@ impl File for OSInode {
     }
 
     /// 获取目录项
+    /// # 参数
+    /// + count：要获取的目录项数量
+    /// # 返回值
+    /// + 获取到的目录项数组/向量
     fn get_dirent(&self, count: usize) -> Vec<Dirent> {
         // 定义三个Dirent常量
         const DT_UNKNOWN: u8 = 0;
@@ -540,8 +544,6 @@ impl File for OSInode {
             offset,
             count
         );
-        println!("[kernel] current offset1: {:?}", *offset);
-
         // 通过调用dirent_info_lock获取元组项
         let vec = self
             .inner
@@ -559,7 +561,6 @@ impl File for OSInode {
         if let Some((_, next_offset, _, _)) = vec.last() {
             *offset = *next_offset;
         }
-        println!("[kernel] current offset2: {:?}", *offset);
         // 迭代vec来获取需要的目录项
         vec.iter()
             .map(|(name, offset, first_clus, type_)| {

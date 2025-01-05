@@ -369,11 +369,9 @@ impl Ext4FileSystem {
         return Err(Errno::ENOENT as isize);
     }
 
-    /// Get dir entries of a inode
-    ///
+    /// 获取指定Inode的目录项
     /// # 参数
     /// + inode: u32 - 目录文件的inode号
-    ///
     /// # 返回值
     /// + `Vec<Ext4DirEntry>` - 目录项列表
     pub fn dir_get_entries(&self, inode: u32) -> Vec<Ext4DirEntry> {
@@ -392,7 +390,7 @@ impl Ext4FileSystem {
 
         // 遍历所有块
         while iblock < total_blocks {
-            // 获取逻辑块号对应的物理块号
+            // 获取逻辑块号对应的物理块号(此处为路径，路径中包含有物理块号)
             let search_path = self.find_extent(&inode_ref, iblock as u32);
 
             if let Ok(path) = search_path {
