@@ -185,6 +185,7 @@ impl File for Ext4OSInode {
                     start_cache += 1;
                     start = end_current_block;
                 }
+                *offset = read_size;
                 read_size
             }
             None => {
@@ -227,6 +228,7 @@ impl File for Ext4OSInode {
                     start_cache += 1;
                     start = end_current_block;
                 }
+                *offset += read_size;
                 read_size
             }
         }
