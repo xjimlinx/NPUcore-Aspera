@@ -82,6 +82,7 @@ fn move_to_high_address() {
         // 从DISK_IMAGE_BASE到MEMORY_END
         let mem_disk = core::slice::from_raw_parts_mut(
             DISK_IMAGE_BASE as *mut u8,
+            // 大小为128MB
             0x800_0000
         );
         mem_disk.fill(0);

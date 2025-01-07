@@ -2,7 +2,7 @@
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 BIOS="$SCRIPTPATH"/u-boot-with-spl.bin
 ln -sf "$SCRIPTPATH"/../tmp/qemu /tmp
-truncate -s 1M $BIOS
+truncate -s 16M $BIOS
 QEMU="$SCRIPTPATH"/../tmp/qemu/bin/qemu-system-loongarch64
 TFTP_DIR="$SCRIPTPATH"/../../../fs-img-dir
 OS="$SCRIPTPATH"/nand.dat
