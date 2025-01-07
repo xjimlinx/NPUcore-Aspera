@@ -392,14 +392,19 @@ pub fn trap_return() -> ! {
 }
 
 /// The KERNEL SPACE trap handler
+/// 内核空间Trap处理程序
 /// # ERA
 /// The ERA kept "as-is" in the `__kern_trap` (See `trap.S`) after this function call.
 /// If modification to `ERA` is needed, this should be taken into account.
 #[no_mangle]
 pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
+    // 获取Trap原因
     let cause = get_exception_cause();
+    // 读取异常子代码（二级编号）
     let sub_code = EStat::read().exception_sub_code();
+    // 模式匹配Trap原因并进行处理
     match cause {
+        // TLB重填
         Trap::TLBReFill => {
             println!(
                 "[trap_handler] {:?}\n\
@@ -418,9 +423,11 @@ pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
                 PWCH::read()
             );
         }
+        // 地址未对齐
         Trap::Exception(Exception::AddressNotAligned) => {
             let pc = gr.pc;
             loop {
+                // 获取当前指令ins和操作码op
                 let ins = Instruction::from(gr.pc as *const Instruction);
                 let op = ins.get_op_code();
                 if op.is_err() {
@@ -473,7 +480,10 @@ pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
             //debug!("{:?}", gr);
             return;
         }
-        _ => {}
+        // Xein Add This
+        _ => {
+            println!("Unhandled Trap Cause!!!");
+        }
     }
     panic!(
         "a trap {:?} from kernel! bad addr = {:#x}, bad instruction = {:#x}, pc:{:#x}, (subcode:{}), PGDH: {:?}, PGDL: {:?}, {}",
@@ -487,8 +497,8 @@ pub extern "C" fn trap_from_kernel(gr: &mut GeneralRegs) {
         if let Trap::Exception(ty) = cause {
             match ty {
                 Exception::AddressError => match sub_code {
-                    0 => "ADdress error Exception for Fetching instructions",
-                    1 => "ADdress error Exception for Memory access instructions",
+                    0 => "Address error Exception for Fetching instructions",
+                    1 => "Address error Exception for Memory access instructions",
                     _ => "Unknown",
                 },
                 _ => "",

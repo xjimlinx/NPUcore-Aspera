@@ -1364,8 +1364,8 @@ impl InodeTrait for Inode {
     /// 改变当前文件的大小
     /// This operation is ignored if the result size is negative
     /// # 参数
-    /// + `inode_lock`: The lock of inode
-    /// + `diff`: The change in file size
+    /// + `inode_lock`: inode锁
+    /// + `diff`: file 大小的改变量
     /// # 警告
     /// This function will not modify its parent directory (since we changed the size of the current file),
     /// we will modify it when it is deleted.

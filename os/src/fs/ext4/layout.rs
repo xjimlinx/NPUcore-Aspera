@@ -1,5 +1,6 @@
 #![allow(unused)]
 use crate::{
+    config::PAGE_SIZE,
     copy_from_name1, copy_to_name1,
     fs::{
         directory_tree::DirectoryTreeNode,
@@ -403,9 +404,9 @@ impl File for Ext4OSInode {
             DiskInodeType::Directory => InodeFileType::S_IFDIR.bits(),
             _ => todo!(),
         };
-        // println!("[kernel] inode_mode={}", inode_mode);
+        println!("[kernel] inode_mode={}", inode_mode);
         let inode_perm = (InodePerm::S_IREAD | InodePerm::S_IWRITE).bits();
-        // println!("[kernel] inode_perm={}", inode_perm);
+        println!("[kernel] inode_perm={}", inode_perm);
         let new_inode_ref = self
             .ext4fs
             .create(self.inode.inode_num, name, inode_mode | inode_perm);
@@ -503,7 +504,7 @@ impl File for Ext4OSInode {
                 )
             })
             .collect();
-        // println!("[kernel in get_dirent] result is {:?}", result);
+        println!("[kernel in get_dirent] current offset is {:?}", offset);
         result
     }
 
@@ -512,6 +513,12 @@ impl File for Ext4OSInode {
     }
 
     fn modify_size(&self, diff: isize) -> Result<(), isize> {
+        let inode_lock = self.inode_lock.write();
+        debug_assert!(diff.saturating_add(self.inode.inode.size() as isize) >= 0);
+
+        let old_size = self.inode.inode.size() as u32;
+        let new_size = (old_size as isize + diff) as u32;
+
         todo!()
     }
 
@@ -665,7 +672,7 @@ impl Ext4OSInode {
                     &self.ext4fs.block_device,
                 )
                 .lock()
-                .read(0, |data_block: &[u8; 4096]| {
+                .read(0, |data_block: &[u8; PAGE_SIZE]| {
                     let dst = &mut buffer[read_size..read_size + block_read_size];
                     let src = &data_block[start % PageCacheManager::CACHE_SZ
                         ..start % PageCacheManager::CACHE_SZ + block_read_size];
@@ -680,5 +687,51 @@ impl Ext4OSInode {
             start = end_current_block;
         }
         read_size
+    }
+
+    pub fn write_at_block_cache(&self, offset: usize, buffer: &[u8]) -> usize {
+        let mut start = offset;
+        let old_size = self.inode.inode.size() as usize;
+        let diff_len = buffer.len() as isize + offset as isize - old_size as isize;
+        if diff_len > 0 {
+            //  self.modify_size(diff_len);
+            todo!()
+        }
+
+        let end = (offset + buffer.len()).min(self.inode.inode.size() as usize);
+
+        debug_assert!(start <= end);
+
+        let mut start_cache = start / PageCacheManager::CACHE_SZ;
+        let mut write_size = 0;
+        loop {
+            let mut end_current_block =
+                (start / PageCacheManager::CACHE_SZ + 1) * PageCacheManager::CACHE_SZ;
+            end_current_block = end_current_block.min(end);
+            // TODO:
+            // add a lock
+            let block_write_size = end_current_block - start;
+            self.file_cache_manager
+                .get_cache(
+                    start_cache,
+                    || -> Vec<usize> { self.get_neighboring_blk(start_cache) },
+                    &self.ext4fs.block_device,
+                )
+                .lock()
+                .modify(0, |data_block: &mut [u8; PAGE_SIZE]| {
+                    let src = &buffer[write_size..write_size + block_write_size];
+                    let dst = &mut data_block[start % PageCacheManager::CACHE_SZ
+                        ..start % PageCacheManager::CACHE_SZ + block_write_size];
+                    dst.copy_from_slice(src);
+                });
+            write_size += block_write_size;
+
+            if end_current_block == end {
+                break;
+            }
+            start_cache += 1;
+            start = end_current_block;
+        }
+        write_size
     }
 }

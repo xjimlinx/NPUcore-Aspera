@@ -553,10 +553,7 @@ impl File for OSInode {
                 count / core::mem::size_of::<Dirent>(),
             )
             .unwrap();
-        if vec.is_empty() {
-            println!("[kernel] empty now");
-        }
-        // 获取最后一个目录项的偏移量
+        // 获取最后一个目录项距离下一个目录项的偏移量
         // fat32下并不是一次性获取完，而是分很多次
         if let Some((_, next_offset, _, _)) = vec.last() {
             *offset = *next_offset;

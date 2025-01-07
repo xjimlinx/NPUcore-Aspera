@@ -525,11 +525,6 @@ impl Ext4Inode {
         }
         buf[offset..offset + data.len()].copy_from_slice(&data);
         block_device.write_block(block_id, &buf);
-        let temp_test_buf = buf.clone();
-        // println!("[kernel sync_inode_to_disk] write buf is {:?}", buf);
-        block_device.read_block(block_id, &mut buf);
-        // println!("[kernel sync_inode_to_disk] read buf is {:?}", buf);
-        assert!(temp_test_buf==buf);
     }
 }
 
