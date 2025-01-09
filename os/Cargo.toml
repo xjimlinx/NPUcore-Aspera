@@ -1,10 +1,8 @@
 [package]
 name = "os"
 version = "0.1.0"
-authors = ["Yifan Wu <shinbokuow@163.com>"]
+# authors = ["Yifan Wu <shinbokuow@163.com>"]
 edition = "2018"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 
 [dependencies]
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
@@ -27,9 +25,6 @@ managed = { version = "0.8", default-features = false, features = ["map"] }
 pci = { git = "https://github.com/huayuntao/dep_pci.git" }
 isomorphic_drivers = { git = "https://github.com/huayuntao/dep_iso.git" }
 
-#loongArch64 = "0.1.0"
-
-
 smoltcp = { version = "0.10.0", default-features = false, features = [
     "alloc",
     "log",
@@ -44,7 +39,6 @@ smoltcp = { version = "0.10.0", default-features = false, features = [
     "socket-dhcpv4",
     "async",
 ] }
-
 
 [features]
 zero_init = []
@@ -63,7 +57,6 @@ board_laqemu = ["oom_handler", "la64"]
 # END of LoongArch Boards.
 
 default = ["board_laqemu", "block_sata"]
-
 
 [profile.dev]
 # 优化级别
