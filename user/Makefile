@@ -31,6 +31,5 @@ endif
 
 clean:
 	@cargo clean
-	@cd ${TESTDIR} && make clean
 
 .PHONY: build rust-user clean

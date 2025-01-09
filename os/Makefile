@@ -54,12 +54,15 @@ LA_LOAD_ADDR = 0x9000000090000000
 
 run: clean env update-usr run-inner
 
-update-usr:user fs-img
+# 更新用户态程序
+update-usr: fs-img
 
+# 编译用户态程序
 user: env
 	@cd ../user && make rust-user BOARD=$(BOARD) MODE=$(MODE)
 
-fs-img:
+# 生成根文件系统镜像
+fs-img: user
 ifeq ($(BOARD),laqemu)
 	@sudo rm -rf ../fs-img-dir
 	./buildfs.sh "$(IMG)" "laqemu" $(MODE) $(FS_MODE)
@@ -67,15 +70,16 @@ else
 	./buildfs.sh "$(IMG)" 2k1000 $(MODE) $(FS_MODE)
 endif
 
-run-inner: build uimage do-run
+# 仅更新内核并运行
+run-inner: uimage do-run
 
-build: env $(KERNEL_BIN)
-
+# 将内核转换为二进制文件
 $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) $@ --strip-all -O binary &
 	@$(OBJDUMP) $(KERNEL_ELF) -SC > target/$(TARGET)/$(MODE)/asm_all.txt
 	@$(READELF) -ash $(KERNEL_ELF) > target/$(TARGET)/$(MODE)/sec.txt &
 
+# 编译内核
 kernel:
 	@echo Platform: $(BOARD)
     ifeq ($(MODE), debug)
@@ -84,23 +88,25 @@ kernel:
 		@cargo build --no-default-features --release --features "comp board_$(BOARD) block_$(BLOCK) $(LOG_OPTION)"  --target $(TARGET)
     endif
 
-uimage: $(KERNEL_BIN)
+# 更新内核
+uimage: env $(KERNEL_BIN)
 	../util/mkimage -A loongarch -O linux -T kernel -C none -a $(LA_LOAD_ADDR) -e $(LA_ENTRY_POINT) -n NPUcore+ -d $(KERNEL_BIN) $(KERNEL_UIMG)
 	-@sudo rm $(U_IMG)
 	@sudo cp -f $$(pwd)/target/$(TARGET)/$(MODE)/os.ui $(U_IMG)
 
 do-run:
 ifeq ($(BOARD), laqemu)
-#First, link the image into the directory.
+# 将镜像链接到指定目录
 	-ln -sf $(IMG_LN) $(QEMU_2k1000_DIR)/$(IMG_NAME)
 	@echo "========WARNING!========"
-	@echo "The next command is expecting a modified runqemu2k1000 script where any potential and implicit \"current working directory\" has been replaced by a generated script storage path."
+	@echo "下一个命令是修改后的runqemu2k1000脚本，其中任何潜在的和隐式的“当前工作目录”已被生成的脚本存储路径所替换。"
 	@./run_script $(QEMU_2k1000)
 else ifeq ($(BOARD), 2k1000)
 	@./run_script $(MINITERM_START_CMD) $(LA_2k1000_PORT_FREQ)
 endif
 
-all: fs-img build mv
+# 生成根文件系统镜像并编译内核
+all: fs-img uimage mv
 mv:
 	mv $(KERNEL_BIN) ../kernel.bin
 
@@ -111,14 +117,12 @@ else ifeq ($(BOARD), 2k1000)
 	@./la_gdbserver minicom -D $(LA_DEBUGGER_PORT_FREQ)
 endif
 
-env: # switch-toolchain
+env: # 切换工具链
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
-	if [ "$(dpkg --list|grep "ii[[:space:]]*expect")"="" ];then true;else sudo apt install expect;fi
+	if ! pacman -Q expect > /dev/null 2>&1; then sudo pacman -S --noconfirm expect; fi
 
 clean:
 	@cargo clean
-	-@sudo rm ../fs-img-dir/uImage
-	-@sudo rm ../fs-img-dir/rootfs-ubifs-ze.img
-	-@cd ../user && make clean
+	@cd ../user && make clean
 
 .PHONY: user update gdb new-gdb monitor .FORCE
