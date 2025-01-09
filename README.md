@@ -88,16 +88,54 @@
 
 3. 缺少部分库文件和编译rust代码出现错误的问题
    建议尝试`make clean`后， 删除对应文件夹的`Cargo.lock`， 尝试在`Cargo.toml`中删除版本限制再重新编译。
+   
+4. Debug编译设置需要调整，因为默认设置无法跳转到动态分发对象内部（即dyn trait对象），在`os/Cargo.toml`内部：
+
+   ```toml
+   [profile.dev]
+   # 优化级别
+   opt-level = "s"
+   # debug = true （默认配置）
+   # 生成详细调试信息
+   debug = 2
+   # 禁用调试断言
+   debug-assertions = false
+   # 整数溢出检查
+   overflow-checks = false
+   # 禁用链接时优化
+   lto = false
+   # panic时进行栈展开
+   panic = 'unwind'
+   # 禁用增量编译
+   incremental = false
+   # 使用16个代码生成单元
+   codegen-units = 16
+   # 禁用运行时库搜索路径
+   rpath = false
+   ```
 
 ## 一、运行方式与运行效果
-
-默认的MODE使用`release`,因为`debug`模式会出现`panic`,目前不知道怎么修复，可能是`rust`版本的问题。
 
 ```bash
 make all
 ```
 
-这步会清理所有生成的内容并执行编译
+这步会生成根文件系统镜像以及内核镜像
+
+```bash
+make gdb
+```
+
+此步会启动gdb调试服务，需搭配loongarch的gdb使用
+
+```bash
+make run
+```
+
+此步会运行qemu同时启动内核、挂载根文件系统镜像，可附加参数`FS_MODE=xxx`，其中`FS_MODE`可为：
+
++ fat32
++ ext4
 
 ## 二、Makefile可用选项相关解释(os目录下)
 
@@ -110,66 +148,41 @@ make all
 
 > 因为编译的机器是7840HS，全部重新执行编译还是会比较慢，所以有如下的内容
 
-#### 2.0.1 只改动了**rootfs**镜像类型
+#### 2.0.1 只改动了**rootfs**镜像类型或者user用户态程序
+
+注：更换baseline之后，内核镜像是链接到根文件系统镜像的，所以无法单独分开操作
 
 ```bash
 # xxx为指定的文件系统类型
-make remake-qemu-flash-img-without-user FS_MODE=xxx
-# 然后执行
-make runsimple
+make run FS_MODE=xxx
 ```
 
 #### 2.0.2 只改动了kernel
 
 ```bash
-# 此步编译内核并链接到fs-img-dir目录下的uImage
-make build
-# 然后执行
-make runsimple
-```
-
-或者直接执行
-
-```bash
-# 阅读Makefile可以发现此步调用 build 和 do-run
-# 而 runsimple 也只执行 do-run
 make run-inner
-```
-
-#### 2.0.3 只改动用户程序
-
-```bash
-# xxx为指定的文件系统类型
-make remake-qemu-flash-img FS_MODE=xxx
-# 然后执行
-make runsimple
 ```
 
 ### 2.1 用户程序编译
 
-`make user`: 编译用户程序
-`make c-user`: 编译 C 用户程序
-`make rust-user`: 编译 Rust 用户程序
+`make user`: 编译用户态程序
 
-### 2.2 文件系统编译
+### 2.2 根文件系统镜像生成
 
 `FS_MODE` 默认为`fat32`，可选项为`ext4`
 
-`make fs-img`: 创建文件系统镜像， 但不写入qemu使用的nand.dat
-`make qemu-flash-fat-img`: 创建文件系统镜像， 且写入qemu使用的nand.dat
-
-若需要进行不同文件系统的测试，先进行：
-`make remake-qemu-flash-img FS_MODE=xxx`: xxx=ext4或者fat32，这样会为qemu生成指定的根文件系统镜像
-再执行：
-`make runsimple`: 运行qemu
+```bash
+# 因为更换了baseline,其qemu启动方式与原来的略有不同，并且rootfs镜像文件是嵌入到内核文件中的
+# 所以暂时无法找到单独生成文件系统不处理其他东西的方法，只能先全部编译
+make all FS_MODE=xxx
+```
 
 ### 2.3 内核编译与运行
 
 注意，在命令后加入`LOG=trace`可以开启trace及以上的所有log，
 log从低到高等级分为`trace`, `debug`, `info`, `warning`, `error`
-`make run`: 编译系统，且执行虚拟机测试
-`make runsimple`: 执行虚拟机测试， 但不编译系统
-`make gdb`: 执行开启debug模式(需要配合gdb使用)
+`make run`: 编译系统，且启动`qemu`
+`make gdb`: 执行开启`debug`模式(需要配合`loongarch64-unknown-linux-gnu-gdb`使用)
 
 ## 三、文档信息
 

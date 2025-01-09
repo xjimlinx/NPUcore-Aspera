@@ -357,9 +357,9 @@ impl File for Ext4OSInode {
         let inode_ref = self.inode.clone();
         // 获取所有的子文件
         let entries = self.ext4fs.dir_get_entries_from_inode_ref(inode_ref);
-        for entry in entries.iter() {
-            println!("[kernel get subfile test] {:?}", entry.get_name());
-        }
+        // for entry in entries.iter() {
+        //     println!("[kernel get subfile test] {:?}", entry.get_name());
+        // }
 
         // 子文件构造闭包，用于upcast
         let get_dyn_file = |entry: &Ext4DirEntry| -> Arc<dyn File> {
@@ -629,10 +629,10 @@ impl Ext4OSInode {
         let blk_cnts = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
         for _ in 0..blk_per_cache {
             if blk_id >= blk_cnts {
-                println!(
-                    "[kernel in get_neighboring_blk] blk_id is out of bound, blk_id: {}, blk_cnts: {}",
-                    blk_id, blk_cnts
-                );
+                // println!(
+                //     "[kernel in get_neighboring_blk] blk_id is out of bound, blk_id: {}, blk_cnts: {}",
+                //     blk_id, blk_cnts
+                // );
                 break;
             }
             // 获取物理块号

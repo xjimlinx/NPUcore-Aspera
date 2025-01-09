@@ -281,20 +281,16 @@ impl Ext4FileSystem {
     pub fn create_inode(&self, inode_mode: u16) -> Result<Ext4InodeRef, isize> {
         // 匹配新inode的文件类型
         let inode_file_type_bits = inode_mode & EXT4_INODE_MODE_TYPE_MASK;
-        println!(
-            "[kernel create_inode] inode_mode {:?}, {:?}",
-            inode_mode,
-            InodeFileType::from_bits(inode_file_type_bits)
-        );
+        // println!(
+        //     "[kernel create_inode] inode_mode {:?}, {:?}",
+        //     inode_mode,
+        //     InodeFileType::from_bits(inode_file_type_bits)
+        // );
         let inode_file_type = match InodeFileType::from_bits(inode_file_type_bits) {
             Some(file_type) => file_type,
             None => InodeFileType::S_IFREG,
         };
-        println!("[kernel create_inode] {:?}", inode_file_type);
-
-        if inode_file_type == InodeFileType::S_IFDIR {
-            println!("[kernel] creating directory inode");
-        }
+        // println!("[kernel create_inode] {:?}", inode_file_type);
 
         // 判断是否是文件夹
         let is_dir = inode_file_type == InodeFileType::S_IFDIR;
@@ -310,17 +306,11 @@ impl Ext4FileSystem {
 
         // set extra size
         let inode_size = self.superblock.inode_size();
-        println!("[kernel create_inode] inode size: {}", inode_size);
         let extra_size = self.superblock.extra_size();
-        println!("[kernel create_inode] extra size: {}", extra_size);
         if inode_size > EXT4_GOOD_OLD_INODE_SIZE {
             let extra_size = extra_size;
             inode.set_i_extra_isize(extra_size);
         }
-        println!(
-            "[kernel create_inode] inode extra isize: {}",
-            inode.i_extra_isize()
-        );
 
         // set extent
         inode.set_flags(EXT4_INODE_FLAG_EXTENTS as u32);
