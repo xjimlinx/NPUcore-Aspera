@@ -66,14 +66,24 @@ default = ["board_laqemu", "block_sata"]
 
 
 [profile.dev]
+# 优化级别
 opt-level = "s"
-debug = true
+# debug = true
+# 生成详细调试信息
+debug = 2
+# 禁用调试断言
 debug-assertions = false
+# 整数溢出检查
 overflow-checks = false
+# 禁用链接时优化
 lto = false
+# panic时进行栈展开
 panic = 'unwind'
+# 禁用增量编译
 incremental = false
+# 使用16个代码生成单元
 codegen-units = 16
+# 禁用运行时库搜索路径
 rpath = false
 [profile.release]
 lto = true
