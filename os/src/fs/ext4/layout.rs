@@ -123,6 +123,7 @@ impl File for Ext4OSInode {
             }
         }
         Arc::new(Self {
+            // 这下面的这一行可能会有问题
             inode_lock: Arc::new(RwLock::new(InodeLock {})),
             readable: self.readable,
             writable: self.writable,
@@ -279,7 +280,34 @@ impl File for Ext4OSInode {
     }
 
     fn write_user(&self, offset: Option<usize>, buf: UserBuffer) -> usize {
-        todo!()
+        let mut total_write_size = 0usize;
+
+        let inode_lock = self.inode_lock.write();
+        match offset {
+            Some(mut offset) => {
+                let mut offset = &mut offset;
+                for slice in buf.buffers.iter() {
+                    let write_size = self.write_at_block_cache(*offset, *slice);
+                    if write_size == 0 {
+                        break;
+                    }
+                    *offset += write_size;
+                    total_write_size += write_size;
+                }
+            }
+            None => {
+                let mut offset = self.offset.lock();
+                for slice in buf.buffers.iter() {
+                    let write_size = self.write_at_block_cache(*offset, *slice);
+                    if write_size == 0 {
+                        break;
+                    }
+                    *offset += write_size;
+                    total_write_size += write_size;
+                }
+            }
+        }
+        total_write_size
     }
 
     /// 获取文件大小
@@ -438,6 +466,7 @@ impl File for Ext4OSInode {
     }
 
     fn unlink(&self, delete: bool) -> Result<(), isize> {
+        println!("did not support unlink for now!");
         todo!()
     }
 
@@ -527,18 +556,20 @@ impl File for Ext4OSInode {
     }
 
     fn set_timestamp(&self, ctime: Option<usize>, atime: Option<usize>, mtime: Option<usize>) {
-        let atime = atime.unwrap();
-        let ctime = ctime.unwrap();
-        let mtime = mtime.unwrap();
-        // let inode = Arc::get_mut(&mut self.inode.clone());
-        // if let Some(inode) = Arc::get_mut(&mut self.inode) {
-        //     inode.set_atime(atime as u32);
-        //     inode.set_ctime(ctime as u32);
-        //     inode.set_mtime(mtime as u32);
-        // } else {
-        //     panic!("Cannot obtain mutable reference to inode!")
-        // }
-        todo!()
+        unsafe {
+            // 将 Arc 转换为裸指针
+            let ptr = Arc::as_ptr(&self.inode) as *mut Ext4Inode;
+            // 直接修改数据
+            if let Some(ctime) = ctime {
+                (*ptr).set_ctime(ctime as u32);
+            }
+            if let Some(atime) = atime {
+                (*ptr).set_atime(atime as u32);
+            }
+            if let Some(mtime) = mtime {
+                (*ptr).set_mtime(mtime as u32);
+            }
+        }
     }
 
     /// 获取单个缓存页
