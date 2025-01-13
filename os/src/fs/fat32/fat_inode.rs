@@ -1075,11 +1075,11 @@ impl InodeTrait for Inode {
     /// It will start to write from `offset` until the buffer is written,
     /// and when the write exceeds the end of file, it will modify file's size.
     /// If hard disk space id low, it will try to write as much data as possible.
-    /// # Arguments
-    /// + `inode_lock`: The lock of inode
+    /// # 参数
+    /// + `inode_lock`: inode锁
     /// + `offset`: The start offset in file
     /// + `buf`: The buffer to write data
-    /// # Return Value
+    /// # 返回值
     /// The number of number of bytes write.
     fn write_at_block_cache_lock(
         &self,
