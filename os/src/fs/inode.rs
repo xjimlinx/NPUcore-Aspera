@@ -344,6 +344,7 @@ impl File for OSInode {
         }
         total_read_size
     }
+
     fn write_user(&self, offset: Option<usize>, buf: UserBuffer) -> usize {
         let mut total_write_size = 0usize;
 
