@@ -67,7 +67,9 @@ pub const MMAP_BASE: usize = 0xFFFF_FF80_0000_0000;
 pub const MMAP_END: usize = 0xFFFF_FFFF_FFFF_0000;
 pub const SKIP_NUM: usize = 1;
 
+// 0x98000000
 pub const DISK_IMAGE_BASE: usize = 0x800_0000 + MEMORY_START;
+// 256
 pub const BUFFER_CACHE_NUM: usize = 256 * 1024 * 1024 / 2048 * 4 / 2048;
 
 pub static mut CLOCK_FREQ: usize = 0;
