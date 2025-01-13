@@ -66,7 +66,7 @@ pub trait PageTable {
 
 #[allow(unused)]
 pub fn gen_start_end(start: VirtAddr, end: VirtAddr) -> (VirtPageNum, VirtPageNum) {
-	(start.floor(), end.ceil())
+    (start.floor(), end.ceil())
 }
 
 /// if `existing_vec == None`, a empty `Vec` will be created.
@@ -104,7 +104,7 @@ pub fn translated_byte_buffer_append_to_existing_vec(
 }
 
 pub fn ptf_ok(ptf: usize) -> bool {
-	ptf & 1 == 1
+    ptf & 1 == 1
 }
 
 pub fn translated_byte_buffer(
@@ -140,10 +140,10 @@ pub fn translated_byte_buffer(
 }
 
 pub fn get_right_aligned_bytes<T>(ptr: *const T) -> usize {
-	let ptr = ptr as usize;
-	let align = core::mem::align_of::<T>();
-	let mask = align - 1;
-	(align - (ptr & mask)) & mask
+    let ptr = ptr as usize;
+    let align = core::mem::align_of::<T>();
+    let mask = align - 1;
+    (align - (ptr & mask)) & mask
 }
 
 /// Load a string from other address spaces into kernel space without an end `\0`.
@@ -194,9 +194,8 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> Result<&'static mut T,
 }
 
 pub struct UserBuffer {
-    
     pub buffers: Vec<&'static mut [u8]>,
-    
+
     pub len: usize,
 }
 
@@ -245,37 +244,37 @@ impl UserBuffer {
     }
 
     pub fn read_at(&self, offset: usize, dst: &mut [u8]) -> usize {
-		if offset >= self.len {
-			return 0;
-		}
-		let mut read_bytes = 0usize;
-		let mut dst_start = 0usize;
-		for buffer in self.buffers.iter() {
-			let dst_end = dst_start + buffer.len();
-			//we can image mapping 'dst' categories to 'src' categories
-			//then we just need to intersect two intervals to get the corresponding interval
-			let copy_dst_start = dst_start.max(offset);
-			//we may worry about overflow,
-			//but we can guarantee that offset(we have checked before) and
-			//dst.len()(because of limited memory) won't be too large
-			let copy_dst_end = dst_end.min(dst.len() + offset);
-			if copy_dst_start >= copy_dst_end {
-				dst_start = dst_end; //don't forget to update dst_start
-				continue;
-			}
-			//mapping 'dst' categories to 'src' categories
-			let copy_src_start = copy_dst_start - offset;
-			let copy_src_end = copy_dst_end - offset;
-			//mapping 'dst' categories to 'buffer' categories
-			let copy_buffer_start = copy_dst_start - dst_start;
-			let copy_buffer_end = copy_dst_end - dst_start;
-			dst[copy_src_start..copy_src_end]
-				.copy_from_slice(&buffer[copy_buffer_start..copy_buffer_end]);
-			read_bytes += copy_dst_end - copy_dst_start;
-			dst_start = dst_end; //don't forget to update dst_start
-		}
-		read_bytes
-	}
+        if offset >= self.len {
+            return 0;
+        }
+        let mut read_bytes = 0usize;
+        let mut dst_start = 0usize;
+        for buffer in self.buffers.iter() {
+            let dst_end = dst_start + buffer.len();
+            //we can image mapping 'dst' categories to 'src' categories
+            //then we just need to intersect two intervals to get the corresponding interval
+            let copy_dst_start = dst_start.max(offset);
+            //we may worry about overflow,
+            //but we can guarantee that offset(we have checked before) and
+            //dst.len()(because of limited memory) won't be too large
+            let copy_dst_end = dst_end.min(dst.len() + offset);
+            if copy_dst_start >= copy_dst_end {
+                dst_start = dst_end; //don't forget to update dst_start
+                continue;
+            }
+            //mapping 'dst' categories to 'src' categories
+            let copy_src_start = copy_dst_start - offset;
+            let copy_src_end = copy_dst_end - offset;
+            //mapping 'dst' categories to 'buffer' categories
+            let copy_buffer_start = copy_dst_start - dst_start;
+            let copy_buffer_end = copy_dst_end - dst_start;
+            dst[copy_src_start..copy_src_end]
+                .copy_from_slice(&buffer[copy_buffer_start..copy_buffer_end]);
+            read_bytes += copy_dst_end - copy_dst_start;
+            dst_start = dst_end; //don't forget to update dst_start
+        }
+        read_bytes
+    }
     pub fn write_at(&mut self, offset: usize, src: &[u8]) -> usize {
         if offset >= self.len {
             return 0;
@@ -384,8 +383,8 @@ impl Iterator for UserBufferIterator {
         }
     }
 }
-pub fn get_add_one<T: StepByOne>(ptr: *const T)  {
-	//TODO!
+pub fn get_add_one<T: StepByOne>(ptr: *const T) {
+    //TODO!
 }
 /// Copy `*src: T` to kernel space.
 /// `src` is a pointer in user space, `dst` is a pointer in kernel space.
