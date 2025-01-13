@@ -52,7 +52,7 @@ MINITERM_START_CMD=python3 -m serial.tools.miniterm --dtr 0 --rts 0 --filter dir
 LA_ENTRY_POINT = 0x9000000090000000
 LA_LOAD_ADDR = 0x9000000090000000
 
-run: clean env update-usr run-inner
+run: env update-usr run-inner
 
 # 更新用户态程序
 update-usr: fs-img
