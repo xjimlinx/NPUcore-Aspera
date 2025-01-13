@@ -903,6 +903,8 @@ pub fn sys_fsync(fd: usize) -> isize {
 }
 
 pub fn sys_fchmodat() -> isize {
+    // baseline 未完成这个函数
+    println!("[kernel in sys_fchmodat] chmod is not supported for now!\n");
     0
 }
 
