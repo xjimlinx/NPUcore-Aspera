@@ -7,6 +7,7 @@ use super::*;
 use crate::syscall::errno::SUCCESS;
 use alloc::vec;
 use alloc::vec::Vec;
+use embedded_hal::serial;
 
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
@@ -263,16 +264,22 @@ impl ExtentNode {
         match &mut self.data {
             NodeData::Root(root_data) => {
                 let header = self.header;
-                for i in 0..header.entries_count {
-                    let idx = (3 + i * 3) as usize;
+                let mut l = 1;
+                let mut r = header.entries_count as usize - 1;
+                while l <= r{
+                    let m = l + (r - l) / 2;
+                    let idx = 3 + m * 3;
                     let ext = Ext4Extent::load_from_u32(&root_data[idx..]);
-                    if lblock >= ext.first_block
-                        && lblock <= ext.first_block + ext.get_actual_len() as u32
-                    {
-                        return Some((ext, i as usize));
+                    if lblock < ext.first_block {
+                        r = m - 1;
+                    } else {
+                        l = m + 1;
                     }
                 }
-                None
+                let idx = 3 + (l - 1) * 3;
+                let ext = Ext4Extent::load_from_u32(&root_data[idx..]);
+
+                Some((ext, l - 1))
             }
             NodeData::Internal(internal_data) => {
                 let mut l = 1;
@@ -280,7 +287,7 @@ impl ExtentNode {
                 while l <= r {
                     let m = l + (r - l) / 2;
                     let offset = size_of::<Ext4ExtentHeader>() + m * size_of::<Ext4Extent>();
-                    let ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
+                    let mut ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
 
                     if lblock < ext.first_block {
                         r = m - 1;
@@ -290,13 +297,14 @@ impl ExtentNode {
                 }
 
                 let offset = size_of::<Ext4ExtentHeader>() + (l - 1) * size_of::<Ext4Extent>();
-                let ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
-                return Some((ext, l - 1));
+                let mut ext = Ext4Extent::load_from_u8_mut(&mut internal_data[offset..]);
+                Some((ext, l - 1))
             }
         }
     }
 
     /// Binary search for the closest index of the given block.
+    /// 二分查找
     pub fn binsearch_idx(&self, lblock: Ext4Lblk) -> Option<usize> {
         if self.header.entries_count == 0 {
             return None;
@@ -444,7 +452,7 @@ impl Ext4Extent {
         self.block_count > EXT_INIT_MAX_LEN
     }
 
-    /// Returns the actual length of the extent.
+    /// 获取extent的实际长度(包括未写入的)
     pub fn get_actual_len(&self) -> u16 {
         if self.is_unwritten() {
             self.block_count - EXT_INIT_MAX_LEN
@@ -453,24 +461,9 @@ impl Ext4Extent {
         }
     }
 
-    /// Can merge next extent to this extent?
-    pub fn can_append(&self, next: &Self) -> bool {
-        self.first_block + self.get_actual_len() as u32 == next.first_block
-            && if self.is_unwritten() {
-                self.get_actual_len() + next.get_actual_len() <= EXT_UNWRITTEN_MAX_LEN
-            } else {
-                self.get_actual_len() + next.get_actual_len() <= EXT_INIT_MAX_LEN
-            }
-    }
-
-    /// Can merge this extent to previous extent?
-    pub fn can_prepend(&self, prev: &Self) -> bool {
-        prev.first_block + prev.get_actual_len() as u32 == self.first_block
-            && if self.is_unwritten() {
-                self.get_actual_len() + prev.get_actual_len() <= EXT_UNWRITTEN_MAX_LEN
-            } else {
-                self.get_actual_len() + prev.get_actual_len() <= EXT_INIT_MAX_LEN
-            }
+    /// 设置extent的实际长度
+    pub fn set_actual_len(&mut self, len: u16) {
+        self.block_count = len;
     }
 
     /// Marks the extent as unwritten.
@@ -535,6 +528,12 @@ impl SearchPath {
     }
 }
 
+impl Default for SearchPath {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// for extent
 ///
 
@@ -573,12 +572,12 @@ impl Ext4FileSystem {
                 let next_block = index.leaf_lo;
 
                 search_path.path.push(ExtentPathNode {
-                    header: node.header.clone(),
+                    header: node.header,
                     index: Some(index),
                     extent: None,
                     position: pos,
                     pblock: next_block as u64,
-                    pblock_of_node: pblock_of_node,
+                    pblock_of_node,
                 });
 
                 let next_block = search_path.path.last().unwrap().index.unwrap().leaf_lo;
@@ -598,27 +597,27 @@ impl Ext4FileSystem {
         // Handle the case where depth is 0
         if let Some((extent, pos)) = node.binsearch_extent(lblock) {
             search_path.path.push(ExtentPathNode {
-                header: node.header.clone(),
+                header: node.header,
                 index: None,
                 extent: Some(extent),
                 position: pos,
                 // pblock: extent.get_pblock(),
                 pblock: lblock as u64 - extent.get_first_block() as u64 + extent.get_pblock(),
-                pblock_of_node: pblock_of_node,
+                pblock_of_node,
             });
             search_path.maxdepth = node.header.depth;
 
             Ok(search_path)
         } else {
             search_path.path.push(ExtentPathNode {
-                header: node.header.clone(),
+                header: node.header,
                 index: None,
                 extent: None,
                 position: 0,
                 pblock: 0,
-                pblock_of_node: pblock_of_node,
+                pblock_of_node,
             });
-            return Ok(search_path);
+            Ok(search_path)
         }
     }
 
@@ -636,7 +635,7 @@ impl Ext4FileSystem {
         let node = &search_path.path[depth]; // Get the node at the current depth
 
         let at_root = node.pblock_of_node == 0;
-        let header = node.header.clone();
+        let header = node.header;
 
         // Node is empty (no extents)
         if header.entries_count == 0 {
@@ -657,7 +656,7 @@ impl Ext4FileSystem {
             //              20              30            40         50          60
             // merge:       |<---newex--->|      |<---ext2--->|
             //              20           40      50          60
-            if self.can_merge(&ex, &newex) {
+            if self.can_merge(&ex, newex) {
                 self.merge_extent(&search_path, &mut ex, &newex)?;
 
                 if at_root {
@@ -677,7 +676,7 @@ impl Ext4FileSystem {
             if pos < last_extent_pos
                 && ((ex.first_block + ex.block_count as u32) < newex.first_block)
             {
-                if let Some(next_extent) = self.get_extent_from_node(&node, pos + 1) {
+                if let Some(next_extent) = self.get_extent_from_node(node, pos + 1) {
                     if self.can_merge(&next_extent, &newex) {
                         self.merge_extent(&search_path, newex, &next_extent)?;
                         return Ok(());
@@ -693,7 +692,7 @@ impl Ext4FileSystem {
             // merge:    |<---newex--->|<---found_ext--->|....|<---ext2--->|
             //           0            20                30    40          50
             if pos > 0 && (newex.first_block + newex.block_count as u32) < ex.first_block {
-                if let Some(mut prev_extent) = self.get_extent_from_node(&node, pos - 1) {
+                if let Some(mut prev_extent) = self.get_extent_from_node(node, pos - 1) {
                     if self.can_merge(&prev_extent, &newex) {
                         self.merge_extent(&search_path, &mut prev_extent, &newex)?;
                         return Ok(());
@@ -737,22 +736,24 @@ impl Ext4FileSystem {
             return false;
         }
 
+        let ext1_ee_len = ex1.get_actual_len();
+        let ext2_ee_len = ex2.get_actual_len();
+
         // Check if the block ranges are contiguous
-        if ex1.first_block + ex1.block_count as u32 != ex2.first_block {
+        if ex1.first_block + ext1_ee_len as u32 != ex2.first_block {
             return false;
         }
 
         // Check if the merged length would exceed the maximum allowed length
-        if ex1.block_count + ex2.block_count > EXT_INIT_MAX_LEN as u16 {
+        if ext1_ee_len + ext2_ee_len > EXT_INIT_MAX_LEN {
             return false;
         }
 
-        // Check if the merged length would exceed the maximum allowed length for unwritten extents
-        if ex1.is_unwritten() && ex1.block_count + ex2.block_count > EXT_UNWRITTEN_MAX_LEN as u16 {
-            return false;
+        // Check if the physical blocks are contiguous
+        if ex1.get_pblock() + ext1_ee_len as u64 == ex2.get_pblock() {
+            return true;
         }
-
-        true
+        false
     }
 
     fn merge_extent(
@@ -761,17 +762,30 @@ impl Ext4FileSystem {
         left_ext: &mut Ext4Extent,
         right_ext: &Ext4Extent,
     ) -> Result<(), isize> {
+        let unwritten = left_ext.is_unwritten();
+        let len = left_ext.get_actual_len() + right_ext.get_actual_len();
+        left_ext.set_actual_len(len);
+        if unwritten {
+            left_ext.mark_unwritten();
+        }
         let depth = search_path.depth as usize;
-        left_ext.block_count += right_ext.block_count;
 
-        if left_ext.first_block >= 0x20000 {
+        let header = search_path.path[depth].header;
+
+        if header.max_entries_count > 4 {
             let node = &search_path.path[depth];
             let block = node.pblock_of_node;
             let new_ex_offset = core::mem::size_of::<Ext4ExtentHeader>()
                 + core::mem::size_of::<Ext4Extent>() * (node.position);
             let mut ext4block = Block::load_offset(self.block_device.clone(), block * BLOCK_SIZE);
             let left_ext: &mut Ext4Extent = ext4block.read_offset_as_mut(new_ex_offset);
-            left_ext.block_count += 1;
+            let unwritten = left_ext.is_unwritten();
+            let len = left_ext.get_actual_len() + right_ext.get_actual_len();
+            left_ext.set_actual_len(len);
+            if unwritten {
+                left_ext.mark_unwritten();
+            }
+
             ext4block.sync_blk_to_disk(self.block_device.clone());
         }
 
@@ -786,14 +800,14 @@ impl Ext4FileSystem {
     ) -> Result<(), isize> {
         let depth = search_path.depth as usize;
         let node = &mut search_path.path[depth]; // Get the node at the current depth
-        let header = node.header.clone();
+        let header = node.header;
 
         // insert at root
         if depth == 0 {
             // Node is empty (no extents)
             if header.entries_count == 0 {
                 *inode_ref.inode.root_extent_mut_at(node.position) = *new_extent;
-                (*inode_ref.inode.root_extent_header_mut()).entries_count += 1;
+                inode_ref.inode.root_extent_header_mut().entries_count += 1;
 
                 self.write_back_inode(inode_ref);
                 return Ok(());
@@ -806,21 +820,21 @@ impl Ext4FileSystem {
                 new_extent
             );
             *inode_ref.inode.root_extent_mut_at(node.position + 1) = *new_extent;
-            (*inode_ref.inode.root_extent_header_mut()).entries_count += 1;
+            inode_ref.inode.root_extent_header_mut().entries_count += 1;
             return Ok(());
         } else {
             // insert at nonroot
-            log::trace!(
-                "insert newex at pos {:x?} current entry_count {:x?} ex {:x?}",
-                node.position + 1,
-                header.entries_count,
-                new_extent
-            );
+            // log::trace!(
+            //     "insert newex at pos {:x?} current entry_count {:x?} ex {:x?}",
+            //     node.position + 1,
+            //     header.entries_count,
+            //     new_extent
+            // );
 
             // load block
             let node_block = node.pblock_of_node;
             let mut ext4block =
-                Block::load_offset(self.block_device.clone(), node_block as usize * BLOCK_SIZE);
+                Block::load_offset(self.block_device.clone(), node_block * BLOCK_SIZE);
             let new_ex_offset = core::mem::size_of::<Ext4ExtentHeader>()
                 + core::mem::size_of::<Ext4Extent>() * (node.position + 1);
 
@@ -943,7 +957,7 @@ impl Ext4FileSystem {
         let depth = search_path.depth as usize;
 
         /* If we do remove_space inside the range of an extent */
-        let mut ex = search_path.path[depth].extent.clone().unwrap();
+        let mut ex = search_path.path[depth].extent.unwrap();
         if ex.get_first_block() < from
             && to < (ex.get_first_block() + ex.get_actual_len() as u32 - 1)
         {
@@ -959,7 +973,7 @@ impl Ext4FileSystem {
             }
             newex.first_block = to + 1;
             newex.block_count = (ee_block + block_count as u32 - 1 - to) as u16;
-            newex.start_lo = (newblock & 0xffffffff) as u32;
+            newex.start_lo = newblock;
             newex.start_hi = ((newblock as u64) >> 32) as u16;
 
             self.insert_extent(inode_ref, &mut newex)?;
@@ -997,7 +1011,7 @@ impl Ext4FileSystem {
             if i as usize == depth {
                 let node_pblock = search_path.path[i as usize].pblock_of_node;
 
-                let header = search_path.path[i as usize].header.clone();
+                let header = search_path.path[i as usize].header;
                 let entries_count = header.entries_count;
 
                 // we are at root
@@ -1021,10 +1035,10 @@ impl Ext4FileSystem {
                 }
                 let ext4block = Block::load_offset(
                     self.block_device.clone(),
-                    node_pblock as usize * BLOCK_SIZE,
+                    node_pblock * BLOCK_SIZE,
                 );
 
-                let header = search_path.path[i as usize].header.clone();
+                let header = search_path.path[i as usize].header;
                 let entries_count = header.entries_count;
 
                 let first_ex: Ext4Extent = ext4block.read_offset_as(size_of::<Ext4ExtentHeader>());
@@ -1079,7 +1093,7 @@ impl Ext4FileSystem {
             // +--------+--------+..+--------+
             // | ext1   | ext2   |..|last_ext|
             // +--------+--------+..+--------+
-            let header = search_path.path[i as usize].header.clone();
+            let header = search_path.path[i as usize].header;
             if self.more_to_rm(&search_path.path[i as usize], to) {
                 // todo
                 // load next idx
@@ -1094,7 +1108,7 @@ impl Ext4FileSystem {
                     }
                 }
 
-                let idx = i as isize;
+                let idx = i;
                 if idx - 1 < 0 {
                     break;
                 }
@@ -1324,7 +1338,7 @@ impl Ext4FileSystem {
             let end_pos = size_of::<Ext4ExtentHeader>()
                 + (header.entries_count as usize) * size_of::<Ext4ExtentIndex>();
 
-            let node_disk_pos = path.path[i].pblock_of_node as usize * BLOCK_SIZE;
+            let node_disk_pos = path.path[i].pblock_of_node * BLOCK_SIZE;
             let mut ext4block = Block::load_offset(self.block_device.clone(), node_disk_pos);
 
             let remaining_indexes: Vec<u8> =
@@ -1438,7 +1452,7 @@ impl Ext4FileSystem {
     }
 
     pub fn more_to_rm(&self, path: &ExtentPathNode, to: u32) -> bool {
-        let header = path.header.clone();
+        let header = path.header;
 
         // No Sibling exists
         if header.entries_count == 1 {

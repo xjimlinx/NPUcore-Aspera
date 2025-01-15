@@ -66,7 +66,7 @@ pub const EXT_INIT_MAX_LEN: u16 = 32768;
 /// 未写入的extent的最大长度
 pub const EXT_UNWRITTEN_MAX_LEN: u16 = 65535;
 /// extent可以涵盖的最大块数
-pub const EXT_MAX_BLOCKS: Ext4Lblk = core::u32::MAX;
+pub const EXT_MAX_BLOCKS: Ext4Lblk = u32::MAX;
 /// 表示extent结构体的魔数
 pub const EXT4_EXTENT_MAGIC: u16 = 0xF30A;
 /// 操作成功

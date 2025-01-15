@@ -114,7 +114,6 @@ impl Default for Ext4DirEntry {
 impl<T> TryFrom<&[T]> for Ext4DirEntry {
     type Error = u64;
     fn try_from(data: &[T]) -> core::result::Result<Self, u64> {
-        let data = data;
         Ok(unsafe { core::ptr::read(data.as_ptr() as *const _) })
     }
 }
@@ -147,8 +146,7 @@ impl Ext4DirEntry {
 
     /// Dir type
     pub fn get_de_type(&self) -> u8 {
-        let de_type = unsafe { self.inner.inode_type } as u8;
-        de_type
+        unsafe { self.inner.inode_type }
     }
 
     /// Get name to string
@@ -161,8 +159,7 @@ impl Ext4DirEntry {
 
     /// Get name len
     pub fn get_name_len(&self) -> usize {
-        let name_len = self.name_len as usize;
-        name_len
+        self.name_len as usize
     }
 
     /// 计算目录项的实际使用长度（不包括填充字节）
@@ -315,7 +312,7 @@ impl Ext4FileSystem {
                     Block::load_offset(self.block_device.clone(), fblock as usize * BLOCK_SIZE);
 
                 // find entry in block
-                let r = self.dir_find_in_block(&mut ext4block, name, result);
+                let r = self.dir_find_in_block(&ext4block, name, result);
 
                 if r.is_ok() {
                     result.pblock_id = fblock as usize;
@@ -362,9 +359,8 @@ impl Ext4FileSystem {
 
             prev_de_offset = offset;
             // go to next entry
-            offset += de.entry_len() as usize;
+            offset = offset + de.entry_len() as usize;
         }
-        // return_errno_with_message!(Errno::ENOENT, "dir find in block failed");
         println!("[kernel direntry] dir find in block failed");
         return Err(Errno::ENOENT as isize);
     }
@@ -502,7 +498,7 @@ impl Ext4FileSystem {
         let mut iblock = 0;
         while iblock < total_blocks {
             // get physical block id of a logical block id
-            let pblock = self.get_pblock_idx(&parent, iblock as u32)?;
+            let pblock = self.get_pblock_idx(parent, iblock as u32)?;
 
             // load physical block
             let mut ext4block =
@@ -579,7 +575,7 @@ impl Ext4FileSystem {
             let rec_len = de.entry_len;
 
             let used_len = de.name_len as usize;
-            let mut sz = core::mem::size_of::<Ext4FakeDirEntry>() + used_len as usize;
+            let mut sz = core::mem::size_of::<Ext4FakeDirEntry>() + used_len;
             if used_len % 4 != 0 {
                 sz += 4 - used_len % 4;
             }
@@ -611,7 +607,6 @@ impl Ext4FileSystem {
             offset += de.entry_len() as usize;
         }
 
-        // return_errno_with_message!(Errno::ENOSPC, "No space in block for new entry");
         println!("[kernel direntry] No space in block for new entry");
         return Err(Errno::ENOSPC as isize);
     }
@@ -657,11 +652,11 @@ impl Ext4FileSystem {
         // prev entry
         let pde: &mut Ext4DirEntry = ext4block.read_offset_as_mut(result.prev_offset);
 
-        (*pde).entry_len += de_del_entry_len;
+        pde.entry_len += de_del_entry_len;
 
         let de_del: &mut Ext4DirEntry = ext4block.read_offset_as_mut(result.offset);
 
-        (*de_del).inode = 0;
+        de_del.inode = 0;
 
         self.dir_set_csum(&mut ext4block, parent.inode.generation());
         ext4block.sync_blk_to_disk(self.block_device.clone());
@@ -724,13 +719,12 @@ impl Ext4FileSystem {
         let mut search_result = Ext4DirSearchResult::new(Ext4DirEntry::default());
 
         // let r = self.dir_find_entry(parent as u32, path, &mut search_result)?;
-        let r = self.dir_find_entry(parent as u32, path, &mut search_result);
+        let r = self.dir_find_entry(parent, path, &mut search_result);
 
         let mut parent_inode_ref = self.get_inode_ref(parent);
         let mut child_inode_ref = self.get_inode_ref(search_result.dentry.inode);
 
         if self.dir_has_entry(child_inode_ref.inode_num) {
-            // return_errno_with_message!(Errno::ENOTSUP, "rm dir with children not supported")
             println!("[kernel] rm dir with chidren not supported");
             return Err(Errno::ENOTSUP as isize);
         }
@@ -746,7 +740,7 @@ impl Ext4FileSystem {
         // ext4_inode_set_links_cnt
         // ext4_fs_free_inode(&child)
 
-        return Ok(EOK);
+        Ok(EOK)
     }
 }
 

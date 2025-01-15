@@ -109,7 +109,7 @@ impl Ext4FileSystem {
         while count > 0 {
             // Load block group reference
             let mut block_group =
-                Ext4BlockGroup::load_new(self.block_device.clone(), &super_block, bgid as usize);
+                Ext4BlockGroup::load_new(self.block_device.clone(), super_block, bgid as usize);
 
             let free_blocks = block_group.get_free_blocks_count();
             if free_blocks == 0 {
@@ -119,10 +119,6 @@ impl Ext4FileSystem {
 
                 if count == 0 {
                     println!("[balloc] No free blocks available in all block groups");
-                    // return_errno_with_message(
-                    //     Errno::ENOSPC,
-                    //     "No free blocks available in all block groups",
-                    // );
                     return Err(Errno::ENOSPC as isize);
                 }
                 continue;
@@ -137,14 +133,14 @@ impl Ext4FileSystem {
             }
 
             // Load block with bitmap
-            let bmp_blk_adr = block_group.get_block_bitmap_block(&super_block);
+            let bmp_blk_adr = block_group.get_block_bitmap_block(super_block);
             let mut bitmap_block =
                 Block::load_offset(self.block_device.clone(), bmp_blk_adr as usize * BLOCK_SIZE);
 
             // Check if goal is free
             if ext4_bmap_is_bit_clr(&bitmap_block.data, idx_in_bg) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, idx_in_bg);
-                block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                block_group.set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                 // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -156,14 +152,14 @@ impl Ext4FileSystem {
             }
 
             // Try to find free block near to goal
-            let blk_in_bg = blocks_per_group as u32;
+            let blk_in_bg = blocks_per_group;
             let end_idx = min((idx_in_bg + 63) & !63, blk_in_bg);
 
             for tmp_idx in (idx_in_bg + 1)..end_idx {
                 if ext4_bmap_is_bit_clr(&bitmap_block.data, tmp_idx) {
                     ext4_bmap_bit_set(&mut bitmap_block.data, tmp_idx);
                     block_group
-                        .set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                        .set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                     // 此处不需要考虑对齐
                     self.block_device
                         .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -177,7 +173,7 @@ impl Ext4FileSystem {
             let mut rel_blk_idx = 0;
             if ext4_bmap_bit_find_clr(&bitmap_block.data, idx_in_bg, blk_in_bg, &mut rel_blk_idx) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, rel_blk_idx);
-                block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                block_group.set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                 // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -191,10 +187,6 @@ impl Ext4FileSystem {
             count -= 1;
         }
 
-        // return_errno_with_message(
-        //     Errno::ENOSPC,
-        //     "No free blocks available in all block groups",
-        // );
         println!("No free blocks available in all block groups");
         return Err(Errno::ENOSPC as isize);
     }
@@ -225,7 +217,7 @@ impl Ext4FileSystem {
         while count > 0 {
             // Load block group reference
             let mut block_group =
-                Ext4BlockGroup::load_new(self.block_device.clone(), &super_block, bgid as usize);
+                Ext4BlockGroup::load_new(self.block_device.clone(), super_block, bgid as usize);
 
             let free_blocks = block_group.get_free_blocks_count();
             if free_blocks == 0 {
@@ -234,10 +226,6 @@ impl Ext4FileSystem {
                 count -= 1;
 
                 if count == 0 {
-                    // return_errno_with_message(
-                    //     Errno::ENOSPC,
-                    //     "No free blocks available in all block groups",
-                    // );
                     println!("No free blocks available in all block groups");
                     return Err(Errno::ENOSPC as isize);
                 }
@@ -253,14 +241,14 @@ impl Ext4FileSystem {
             }
 
             // Load block with bitmap
-            let bmp_blk_adr = block_group.get_block_bitmap_block(&super_block);
+            let bmp_blk_adr = block_group.get_block_bitmap_block(super_block);
             let mut bitmap_block =
                 Block::load_offset(self.block_device.clone(), bmp_blk_adr as usize * BLOCK_SIZE);
 
             // Check if goal is free
             if ext4_bmap_is_bit_clr(&bitmap_block.data, idx_in_bg) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, idx_in_bg);
-                block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                block_group.set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                 // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -274,14 +262,14 @@ impl Ext4FileSystem {
             }
 
             // Try to find free block near to goal
-            let blk_in_bg = blocks_per_group as u32;
+            let blk_in_bg = blocks_per_group;
             let end_idx = min((idx_in_bg + 63) & !63, blk_in_bg);
 
             for tmp_idx in (idx_in_bg + 1)..end_idx {
                 if ext4_bmap_is_bit_clr(&bitmap_block.data, tmp_idx) {
                     ext4_bmap_bit_set(&mut bitmap_block.data, tmp_idx);
                     block_group
-                        .set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                        .set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                     // 此处不需要考虑对齐
                     self.block_device
                         .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -297,7 +285,7 @@ impl Ext4FileSystem {
             let mut rel_blk_idx = 0;
             if ext4_bmap_bit_find_clr(&bitmap_block.data, idx_in_bg, blk_in_bg, &mut rel_blk_idx) {
                 ext4_bmap_bit_set(&mut bitmap_block.data, rel_blk_idx);
-                block_group.set_block_group_balloc_bitmap_csum(&super_block, &bitmap_block.data);
+                block_group.set_block_group_balloc_bitmap_csum(super_block, &bitmap_block.data);
                 // 此处不需要考虑对齐
                 self.block_device
                     .write_block(bmp_blk_adr as usize, &bitmap_block.data);
@@ -312,11 +300,6 @@ impl Ext4FileSystem {
             bgid = (bgid + 1) % block_group_count;
             count -= 1;
         }
-
-        // return_errno_with_message(
-        //     Errno::ENOSPC,
-        //     "No free blocks available in all block groups",
-        // );
         println!("No free blocks available in all block groups");
         return Err(Errno::ENOSPC as isize);
     }
@@ -380,20 +363,20 @@ impl Ext4FileSystem {
 
             let mut free_cnt = BLOCK_SIZE * 8 - idx_in_bg as usize;
 
-            if count as usize > free_cnt {
+            if count > free_cnt {
             } else {
-                free_cnt = count as usize;
+                free_cnt = count;
             }
 
-            ext4_bmap_bits_free(&mut data, idx_in_bg as u32, free_cnt as u32);
+            ext4_bmap_bits_free(data, idx_in_bg as u32, free_cnt as u32);
 
             count -= free_cnt;
             start += free_cnt as u64;
 
-            bg.set_block_group_balloc_bitmap_csum(&super_block, &data);
+            bg.set_block_group_balloc_bitmap_csum(&super_block, data);
             // 此处不需要考虑对齐
             self.block_device
-                .write_block(block_bitmap_block as usize, &data);
+                .write_block(block_bitmap_block as usize, data);
 
             /* Update superblock free blocks count */
             let mut super_blk_free_blocks = super_block.free_blocks_count();
@@ -405,7 +388,7 @@ impl Ext4FileSystem {
             /* Update inode blocks (different block size!) count */
             let mut inode_blocks = inode_ref.inode.blocks_count();
 
-            inode_blocks -= (free_cnt as usize * (BLOCK_SIZE / EXT4_INODE_BLOCK_SIZE)) as u64;
+            inode_blocks -= (free_cnt * (BLOCK_SIZE / EXT4_INODE_BLOCK_SIZE)) as u64;
             inode_ref.inode.set_blocks_count(inode_blocks);
             self.write_back_inode(inode_ref);
 

@@ -126,7 +126,7 @@ impl Ext4FileSystem {
 
             // 查找失败
             if let Err(e) = r {
-                if e.error() != Errno::ENOENT.into() || !create {
+                if e.error() != Errno::ENOENT || !create {
                     println!("[kernel generic_open] No such file or directory");
                 }
 
@@ -140,8 +140,11 @@ impl Ext4FileSystem {
 
                 let new_inode_ref = self.create(*parent, current_path, inode_mode)?;
 
-                // not goal update parent
+                // Update parent the new inode
                 *parent = new_inode_ref.inode_num;
+
+                // Update dir_search_result to reflect the new inode
+                dir_search_result.dentry.inode = new_inode_ref.inode_num;
 
                 continue;
             }

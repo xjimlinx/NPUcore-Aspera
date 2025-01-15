@@ -175,16 +175,14 @@ impl Ext4BlockGroup {
 
         // cast self to &[u8]
         let self_bytes =
-            unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, 0x40 as usize) };
+            unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, 0x40) };
 
         // bg checksum
         checksum = ext4_crc32c(checksum, self_bytes, desc_size as u32);
 
         self.checksum = orig_checksum;
 
-        let crc = (checksum & 0xFFFF) as u16;
-
-        crc
+        (checksum & 0xFFFF) as u16
     }
 
     /// 将块组数据同步到磁盘。
@@ -354,8 +352,7 @@ impl Block {
     pub fn read_as<T>(&self) -> T {
         unsafe {
             let ptr = self.data.as_ptr() as *const T;
-            let value = ptr.read_unaligned();
-            value
+            ptr.read_unaligned()
         }
     }
 
@@ -364,8 +361,7 @@ impl Block {
         unsafe {
             let offset = offset % BLOCK_SIZE;
             let ptr = self.data.as_ptr().add(offset) as *const T;
-            let value = ptr.read_unaligned();
-            value
+            ptr.read_unaligned()
         }
     }
 

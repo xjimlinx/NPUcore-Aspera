@@ -281,29 +281,33 @@ impl File for Ext4OSInode {
 
     fn write_user(&self, offset: Option<usize>, buf: UserBuffer) -> usize {
         let mut total_write_size = 0usize;
-
+        let inode_num = self.inode.inode_num;
         let inode_lock = self.inode_lock.write();
         match offset {
             Some(mut offset) => {
                 let mut offset = &mut offset;
                 for slice in buf.buffers.iter() {
-                    let write_size = self.write_at_block_cache(*offset, *slice);
-                    if write_size == 0 {
-                        break;
+                    let write_size = self.ext4fs.write_at(inode_num, *offset, slice);
+                    if let Ok(write_size) = write_size {
+                        if write_size == 0 {
+                            break;
+                        }
+                        *offset += write_size;
+                        total_write_size += write_size;
                     }
-                    *offset += write_size;
-                    total_write_size += write_size;
                 }
             }
             None => {
                 let mut offset = self.offset.lock();
                 for slice in buf.buffers.iter() {
-                    let write_size = self.write_at_block_cache(*offset, *slice);
-                    if write_size == 0 {
-                        break;
+                    let write_size = self.ext4fs.write_at(inode_num, *offset, slice);
+                    if let Ok(write_size) = write_size {
+                        if write_size == 0 {
+                            break;
+                        }
+                        *offset += write_size;
+                        total_write_size += write_size;
                     }
-                    *offset += write_size;
-                    total_write_size += write_size;
                 }
             }
         }
@@ -533,7 +537,7 @@ impl File for Ext4OSInode {
                 )
             })
             .collect();
-        println!("[kernel in get_dirent] current offset is {:?}", offset);
+        // println!("[kernel in get_dirent] current offset is {:?}", offset);
         result
     }
 
@@ -542,17 +546,32 @@ impl File for Ext4OSInode {
     }
 
     fn modify_size(&self, diff: isize) -> Result<(), isize> {
-        let inode_lock = self.inode_lock.write();
+        // let inode_lock = self.inode_lock.write();
         debug_assert!(diff.saturating_add(self.inode.inode.size() as isize) >= 0);
 
         let old_size = self.inode.inode.size() as u32;
         let new_size = (old_size as isize + diff) as u32;
 
-        todo!()
+        // drop(inode_lock);
+
+        if diff >0 {
+            todo!()
+        } else {
+            self.file_cache_manager.notify_new_size(new_size as usize);
+        }
+
+        Ok(())
     }
 
     fn truncate_size(&self, new_size: usize) -> Result<(), isize> {
-        todo!()
+        let old_size = self.inode.inode.size() as u32;
+        let result = self.modify_size(new_size as isize - old_size as isize);
+        if let Ok(result) = result {
+            Ok(())
+        } else {
+            // Err(-1)
+            panic!("modify_size failed: {:?}", result)
+        }
     }
 
     fn set_timestamp(&self, ctime: Option<usize>, atime: Option<usize>, mtime: Option<usize>) {
@@ -608,10 +627,10 @@ impl File for Ext4OSInode {
         let file_size = self.inode.inode.size();
         let cache_num =
             (file_size as usize + PageCacheManager::CACHE_SZ - 1) / PageCacheManager::CACHE_SZ;
-        println!(
-            "[kernel in get_all_caches] file size: {} cache_num: {}",
-            file_size, cache_num
-        );
+        // println!(
+        //     "[kernel in get_all_caches] file size: {} cache_num: {}",
+        //     file_size, cache_num
+        // );
         let mut cache_list = Vec::<Arc<Mutex<PageCache>>>::with_capacity(cache_num);
         // 使用自身的get_single_cache方法
         for cache_id in 0..cache_num {
@@ -675,6 +694,7 @@ impl Ext4OSInode {
             block_ids.push(start_block_id as usize);
             blk_id += 1;
         }
+        // println!("[kernel in get_neighboring_blk] block_ids: {:?}", block_ids);
         block_ids
     }
 
@@ -721,9 +741,13 @@ impl Ext4OSInode {
     }
 
     pub fn write_at_block_cache(&self, offset: usize, buffer: &[u8]) -> usize {
+        // 修改的起始位置
         let mut start = offset;
+        // 原文件大小
         let old_size = self.inode.inode.size() as usize;
+        // 变化的大小
         let diff_len = buffer.len() as isize + offset as isize - old_size as isize;
+        // 大于0 说明要增加大小
         if diff_len > 0 {
             //  self.modify_size(diff_len);
             todo!()

@@ -419,7 +419,7 @@ impl Ext4Inode {
         unsafe {
             (*header_ptr).set_magic();
             (*header_ptr).set_entries_count(0);
-            (*header_ptr).set_max_entries_count(4); // 假设最大条目数为 4
+            (*header_ptr).set_max_entries_count(4);
             (*header_ptr).set_depth(0);
             (*header_ptr).set_generation(0);
         }
@@ -461,7 +461,7 @@ impl Ext4Inode {
         let orig_checksum = self.get_checksum(super_block);
         let mut checksum = 0;
 
-        let ino_index = inode_id as u32;
+        let ino_index = inode_id;
         let ino_gen = self.generation;
 
         // Preparation: temporarily set bg checksum to 0
@@ -829,9 +829,7 @@ impl Ext4FileSystem {
         // 获取inode表块号
         let inode_table_blk_num = block_group.get_inode_table_blk_num();
         // 计算字节偏移量
-        let offset =
-            inode_table_blk_num as usize * BLOCK_SIZE + index as usize * inode_size as usize;
-        offset
+        inode_table_blk_num as usize * BLOCK_SIZE + index as usize * inode_size as usize
     }
 
     /// 从磁盘加载inoderef对象
@@ -844,7 +842,7 @@ impl Ext4FileSystem {
         let inode: &mut Ext4Inode = ext4block.read_offset_as_mut(offset % BLOCK_SIZE);
 
         Ext4InodeRef {
-            inode_num: inode_num,
+            inode_num,
             inode: *inode,
         }
     }
@@ -897,7 +895,7 @@ impl Ext4FileSystem {
         inode_ref: &Ext4InodeRef,
         lblock: Ext4Lblk,
     ) -> Result<Ext4Fsblk, isize> {
-        let search_path = self.find_extent(&inode_ref, lblock);
+        let search_path = self.find_extent(inode_ref, lblock);
         if let Ok(path) = search_path {
             // get the last path
             let path = path.path.last().unwrap();
@@ -908,14 +906,13 @@ impl Ext4FileSystem {
             return Ok(fblock);
         }
 
-        // return_errno_with_message(Errno::EIO, "search extent fail")
         panic!("search extent fail!");
         // Err(Errno::EIO as isize)
     }
 
     /// 分配一个新的块
     pub fn allocate_new_block(&self, inode_ref: &mut Ext4InodeRef) -> Result<Ext4Fsblk, isize> {
-        let super_block = self.superblock;
+        let mut super_block = self.superblock;
         let inodes_per_group = super_block.inodes_per_group();
         let bgid = (inode_ref.inode_num - 1) / inodes_per_group;
         let index = (inode_ref.inode_num - 1) % inodes_per_group;
@@ -930,15 +927,15 @@ impl Ext4FileSystem {
         self.block_device
             .read_block(block_bitmap_block as usize, &mut block_bmap_raw_data);
         let mut data: &mut Vec<u8> = &mut block_bmap_raw_data.to_vec();
-        let mut rel_blk_idx = 0 as u32;
+        let mut rel_blk_idx = 0;
 
-        ext4_bmap_bit_find_clr(data, index as u32, 0x8000, &mut rel_blk_idx);
-        ext4_bmap_bit_set(&mut data, rel_blk_idx);
+        ext4_bmap_bit_find_clr(data, index, 0x8000, &mut rel_blk_idx);
+        ext4_bmap_bit_set(data, rel_blk_idx);
 
-        block_group.set_block_group_balloc_bitmap_csum(&super_block, &data);
-        todo!();
+        block_group.set_block_group_balloc_bitmap_csum(&super_block, data);
+        // todo!();
         self.block_device
-            .write_block(block_bitmap_block as usize, &data);
+            .write_block(block_bitmap_block as usize, data);
 
         /* Update superblock free blocks count */
         let mut super_blk_free_blocks = super_block.free_blocks_count();
