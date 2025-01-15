@@ -92,11 +92,11 @@ pub struct DirectoryTreeNode {
     /// 1. 被某些进程执行
     /// 该参数在打开时增加1
     spe_usage: Mutex<usize>,
-    name: String,
+    pub name: String,
     // 文件系统实例
     filesystem: Arc<FileSystem>,
     // 文件
-    file: Arc<dyn File>,
+    pub file: Arc<dyn File>,
     // 指向自己的弱引用
     selfptr: Mutex<Weak<Self>>,
     // 指向父节点的弱引用

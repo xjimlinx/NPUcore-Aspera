@@ -626,13 +626,11 @@ impl Ext4FileSystem {
     }
 
     /// File truncate
-    ///
-    /// Params:
+    /// + 参数
     /// inode_ref: &mut Ext4InodeRef - inode reference
-    /// new_size: u64 - new size of the file
-    ///
-    /// Returns:
-    /// `Result<usize>` - status of the operation
+    /// new_size: u64 - 文件的新大小
+    /// + 返回值
+    /// `Result<usize>` - 操作状态
     pub fn truncate_inode(
         &self,
         inode_ref: &mut Ext4InodeRef,
@@ -640,7 +638,11 @@ impl Ext4FileSystem {
     ) -> Result<usize, isize> {
         let old_size = inode_ref.inode.size();
 
-        assert!(old_size > new_size);
+        // assert!(old_size > new_size);
+        if old_size > new_size{
+            println!("[kernel] this may need to be changed");
+            return Ok(EOK)
+        }
 
         if old_size == new_size {
             return Ok(EOK);

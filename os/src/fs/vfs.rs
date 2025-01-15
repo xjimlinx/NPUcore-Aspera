@@ -65,7 +65,7 @@ impl VFS {
             FS_Type::Fat32 => OSInode::new(FatInode::root_inode(vfs)),
             FS_Type::Ext4 => {
                 let vfs_concrete = Arc::downcast::<Ext4FileSystem>(vfs.clone()).unwrap();
-                let root_inode = Arc::new(vfs_concrete.get_inode_ref(ROOT_INODE));
+                let root_inode = vfs_concrete.get_inode_ref(ROOT_INODE);
                 Ext4OSInode::new(root_inode, vfs_concrete)
             }
             FS_Type::Null => panic!("Null filesystem type does not have a root inode"),
