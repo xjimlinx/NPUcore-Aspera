@@ -375,7 +375,10 @@ impl Ext4FileSystem {
 
         // 加载inode
         let inode_ref = self.get_inode_ref(inode);
-        assert!(inode_ref.inode.is_dir());
+        // assert!(inode_ref.inode.is_dir());
+        if !inode_ref.inode.is_dir() {
+            return Vec::new();
+        }
 
         // 计算总块数
         let inode_size = inode_ref.inode.size();

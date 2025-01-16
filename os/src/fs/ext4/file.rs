@@ -296,7 +296,10 @@ impl Ext4FileSystem {
         let is_dir = inode_file_type == InodeFileType::S_IFDIR;
 
         // 分配inode
-        let inode_num = self.alloc_inode(is_dir)?;
+        let inode_num = self.alloc_inode(is_dir);
+        if let Err(e) = inode_num {
+            return Err(e);
+        }
 
         // 初始化inode
         let mut inode = Ext4Inode::default();
@@ -317,7 +320,7 @@ impl Ext4FileSystem {
         inode.extent_tree_init();
 
         let inode_ref = Ext4InodeRef {
-            inode_num,
+            inode_num: inode_num.unwrap(),
             inode,
         };
 

@@ -10,7 +10,7 @@ use crate::{
         }, file_trait::File, inode::{InodeLock, InodeTrait}, vfs::VFS, DiskInodeType, OpenFlags, SeekWhence, Stat, StatMode
     },
     lang_items::Bytes,
-    mm::UserBuffer, syscall::errno::{EINVAL, ENOTEMPTY},
+    mm::UserBuffer, syscall::errno::{EINVAL, ENOTDIR, ENOTEMPTY},
 };
 use alloc::{
     format,
@@ -391,6 +391,9 @@ impl File for Ext4OSInode {
         // 获取所有的子文件
         // TODO: Maybe Wrong
         // let entries = self.ext4fs.dir_get_entries_from_inode_ref(Arc::new(inode_ref.clone()));
+        if inode_ref.inode.get_file_type() != DiskInodeType::Directory {
+            return Err(ENOTDIR);
+        }
         let entries = self.ext4fs.dir_get_entries(inode_ref.inode_num);
         // for entry in entries.iter() {
         //     println!("[kernel get subfile test] {:?}", entry.get_name());
@@ -439,14 +442,37 @@ impl File for Ext4OSInode {
             DiskInodeType::Directory => InodeFileType::S_IFDIR.bits(),
             _ => todo!(),
         };
+
         let inode_ref = self.inode.lock();
+        let mut nameoff = 0;
+        if inode_mode == InodeFileType::S_IFDIR.bits() {
+            let new_inode_num = self.ext4fs.generic_open(name, &mut inode_ref.inode_num.clone(), true, inode_mode, &mut nameoff);
+            if let Ok(new_inode_num) = new_inode_num {
+                let new_inode_ref = self.ext4fs.get_inode_ref(new_inode_num);
+                return Ok(Arc::new(Self {
+                    inode_lock: Arc::new(RwLock::new(InodeLock {})),
+                    readable: true,
+                    writable: true,
+                    special_use: false,
+                    append: false,
+                    inode: Arc::new(Mutex::new(new_inode_ref)),
+                    offset: Mutex::new(0),
+                    dirnode_ptr: Arc::new(Mutex::new(Weak::new())),
+                    ext4fs: self.ext4fs.clone(),
+                    // maybe wrong
+                    file_cache_manager: Arc::new(PageCacheManager::new()),
+                }))
+            } else {
+                panic!()
+            }
+        }
         println!("[kernel] inode_mode={}", inode_mode);
         let inode_perm = (InodePerm::S_IREAD | InodePerm::S_IWRITE).bits();
         println!("[kernel] inode_perm={}", inode_perm);
         let new_inode_ref = self
             .ext4fs
             // .create(self.inode.inode_num, name, inode_mode | inode_perm);
-            .create(inode_ref.inode_num, name, inode_mode | inode_mode);
+            .create(inode_ref.inode_num, name, inode_mode | inode_perm);
         if let Ok(inode_ref) = new_inode_ref {
             Ok(Arc::new(Self {
                 inode_lock: Arc::new(RwLock::new(InodeLock {})),

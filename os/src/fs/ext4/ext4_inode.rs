@@ -1032,9 +1032,12 @@ impl Ext4FileSystem {
     /// + `Result<u32>` - inode 号
     pub fn alloc_inode(&self, is_dir: bool) -> Result<u32, isize> {
         // 分配inode号
-        let inode_num = self.ialloc_alloc_inode(is_dir)?;
-
-        Ok(inode_num)
+        let inode_num = self.ialloc_alloc_inode(is_dir);
+        if let Ok(inode_num) = inode_num {
+            Ok(inode_num)
+        } else {
+            panic!("alloc_inode failed:{:?}", inode_num);
+        }
     }
 
     pub fn correspond_inode_mode(&self, filetype: u8) -> u16 {
