@@ -1,5 +1,5 @@
 use crate::{
-    arch::{console_flush, console_putchar},
+    hal::arch::{console_flush, console_putchar},
     task::current_task,
 };
 use core::fmt::{self, Write};

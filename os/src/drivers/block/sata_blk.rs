@@ -1,14 +1,14 @@
 use crate::config::PAGE_SIZE;
-use crate::mm::{frame_alloc, frame_dealloc, PhysAddr};
 use crate::drivers::block::BlockDevice;
-use crate::arch::BLOCK_SZ;
+use crate::hal::arch::BLOCK_SZ;
+use crate::mm::{frame_alloc, frame_dealloc, PhysAddr};
 use isomorphic_drivers::{
-    provider,
     block::ahci::{AHCI, BLOCK_SIZE},
+    provider,
 };
 use log::info;
-use spin::Mutex;
 use pci::*;
+use spin::Mutex;
 pub struct SataBlock(Mutex<AHCI<Provider>>);
 
 impl SataBlock {
@@ -22,9 +22,7 @@ impl BlockDevice for SataBlock {
         // 内核BLOCK_SZ为2048，SATA驱动中BLOCK_SIZE为512，四倍转化关系
         block_id = block_id * (BLOCK_SZ / BLOCK_SIZE);
         for buf in buf.chunks_mut(BLOCK_SIZE) {
-            self.0
-                .lock()
-                .read_block(block_id, buf);
+            self.0.lock().read_block(block_id, buf);
             block_id += 1;
         }
     }
@@ -32,9 +30,7 @@ impl BlockDevice for SataBlock {
     fn write_block(&self, mut block_id: usize, buf: &[u8]) {
         block_id = block_id * (BLOCK_SZ / BLOCK_SIZE);
         for buf in buf.chunks(BLOCK_SIZE) {
-            self.0
-                .lock()
-                .write_block(block_id, buf);
+            self.0.lock().write_block(block_id, buf);
             block_id += 1;
         }
     }
@@ -80,9 +76,15 @@ const PCI_COMMAND: u16 = 0x04;
 
 struct UnusedPort;
 impl PortOps for UnusedPort {
-    unsafe fn read8(&self, _port: u16) -> u8 {0}
-    unsafe fn read16(&self, _port: u16) -> u16 {0}
-    unsafe fn read32(&self, _port: u16) -> u32 {0}
+    unsafe fn read8(&self, _port: u16) -> u8 {
+        0
+    }
+    unsafe fn read16(&self, _port: u16) -> u16 {
+        0
+    }
+    unsafe fn read32(&self, _port: u16) -> u32 {
+        0
+    }
     unsafe fn write8(&self, _port: u16, _val: u8) {}
     unsafe fn write16(&self, _port: u16, _val: u16) {}
     unsafe fn write32(&self, _port: u16, _val: u32) {}

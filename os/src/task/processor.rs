@@ -1,7 +1,7 @@
 use super::{__switch, do_wake_expired};
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
-use crate::arch::TrapContext;
+use crate::hal::arch::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
 use spin::Mutex;

@@ -1,4 +1,4 @@
-use crate::arch::{
+use crate::hal::arch::{
     get_bad_instruction, get_exception_cause, MachineContext, TrapContext, UserContext,
 };
 use alloc::boxed::Box;
@@ -7,7 +7,7 @@ use core::fmt::{self, Debug, Formatter};
 use core::mem::size_of;
 use log::{debug, error, trace, warn};
 
-use crate::arch::get_bad_addr;
+use crate::hal::arch::get_bad_addr;
 use crate::mm::{
     copy_from_user, copy_to_user, translated_ref, translated_refmut, try_get_from_user,
 };
@@ -200,7 +200,7 @@ impl Debug for SigHandler {
     }
 }
 
-#[cfg(feature = "la64")]
+#[cfg(feature = "loongarch64")]
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct SigAction {
@@ -209,7 +209,7 @@ pub struct SigAction {
     pub mask: Signals,
     pub restorer: usize,
 }
-#[cfg(not(feature = "la64"))]
+#[cfg(not(feature = "loongarch64"))]
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct SigAction {

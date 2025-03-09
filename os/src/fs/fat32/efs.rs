@@ -2,9 +2,9 @@
 use core::arch::asm;
 use core::ptr::addr_of;
 
-use crate::arch;
 use crate::fs::filesystem::FS_Type;
 use crate::fs::inode::FatInode;
+use crate::hal::arch;
 
 use super::{layout::BPB, Cache};
 use super::{BlockCacheManager, BlockDevice, DiskInodeType, Fat, Inode};

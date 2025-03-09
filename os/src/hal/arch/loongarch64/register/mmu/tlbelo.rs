@@ -60,7 +60,7 @@ pub trait TLBEL: BitField {
     fn set_ppn(&mut self, ppn: PhysPageNum) -> &mut Self;
 }
 
-use crate::{arch::la64::laflex::LAFlexPageTableEntry, config::PALEN, mm::PhysPageNum};
+use crate::{config::PALEN, hal::arch::loongarch64::laflex::LAFlexPageTableEntry, mm::PhysPageNum};
 use bit_field::BitField;
 use core::{
     convert::TryFrom,
@@ -69,7 +69,7 @@ use core::{
 
 use super::MemoryAccessType;
 
-impl_define_csr!(TLBELO0, "TLB Entry Low-order Bits 
+impl_define_csr!(TLBELO0, "TLB Entry Low-order Bits
 n
 TLBELO0 and TLBELO1 registers contain the information related to the physical page number of the low-order bits of the TLB table entry during executing TLB-related instructions.
 Since TLB adopts a dual-page structure,
@@ -134,7 +134,7 @@ impl TLBEL for TLBELO0 {
     }
 }
 
-impl_define_csr!(TLBELO1, "TLB Entry Low-order Bits 
+impl_define_csr!(TLBELO1, "TLB Entry Low-order Bits
 
 TLBELO0 and TLBELO1 registers contain the information related to the physical page number of the low-order bits of the TLB table entry during executing TLB-related instructions.
 Since TLB adopts a dual-page structure,

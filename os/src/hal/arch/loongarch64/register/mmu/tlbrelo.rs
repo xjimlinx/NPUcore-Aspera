@@ -1,8 +1,8 @@
 use core::convert::{TryFrom, TryInto};
 
 use super::{tlbelo::TLBEL, MemoryAccessType};
-use crate::arch::la64::laflex::LAFlexPageTableEntry;
 use crate::config::PALEN;
+use crate::hal::arch::loongarch64::laflex::LAFlexPageTableEntry;
 use crate::mm::address::PhysPageNum;
 use bit_field::BitField;
 impl_define_csr!(TLBRELo0,"TLB Refill Exception Entry Low-order Bits (TLBRELO0, TLBRELO1)

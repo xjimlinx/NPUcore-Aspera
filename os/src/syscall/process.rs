@@ -1,6 +1,7 @@
-use crate::arch::{MachineContext, TrapContext};
 use crate::config::{PAGE_SIZE, SYSTEM_TASK_LIMIT, USER_STACK_SIZE};
 use crate::fs::OpenFlags;
+use crate::hal::arch::shutdown;
+use crate::hal::arch::{MachineContext, TrapContext};
 use crate::mm::{
     copy_from_user, copy_to_user, copy_to_user_string, get_from_user, translated_byte_buffer,
     translated_ref, translated_refmut, translated_str, try_get_from_user, MapFlags, MapPermission,
@@ -23,7 +24,6 @@ use alloc::vec::Vec;
 use core::mem::size_of;
 use log::{debug, error, info, trace, warn};
 use num_enum::FromPrimitive;
-use crate::arch::shutdown;
 pub fn sys_shutdown() -> isize {
     shutdown()
 }
@@ -265,7 +265,10 @@ pub fn sys_uname(buf: *mut u8) -> isize {
     buffer.write_at(FIELD_OFFSET * 0, b"NPUcore\0");
     buffer.write_at(FIELD_OFFSET * 1, b"xeinnious\0");
     buffer.write_at(FIELD_OFFSET * 2, b"0.10.0-1-loongarch64\0");
-    buffer.write_at(FIELD_OFFSET * 3, b"#1 SMP Xein-Revo 0.10.0-1 (2025-01-10)\0");
+    buffer.write_at(
+        FIELD_OFFSET * 3,
+        b"#1 SMP Xein-Revo 0.10.0-1 (2025-01-10)\0",
+    );
     buffer.write_at(FIELD_OFFSET * 4, b"loongarch64\0");
     buffer.write_at(FIELD_OFFSET * 5, b"\0");
     SUCCESS
@@ -1071,7 +1074,7 @@ pub fn sys_sigreturn() -> isize {
             + 2 * size_of::<usize>()
             + size_of::<SignalStack>()
             + size_of::<Signals>()
-            + crate::arch::UserContext::PADDING_SIZE) as *mut MachineContext,
+            + crate::hal::arch::UserContext::PADDING_SIZE) as *mut MachineContext,
         (trap_cx as *mut TrapContext).cast::<MachineContext>(),
     )
     .unwrap(); // restore trap_cx
@@ -1095,7 +1098,7 @@ pub fn sys_times(buf: *mut Times) -> isize {
         return EFAULT;
     };
     // return clock ticks that have elapsed since an arbitrary point in the past
-    crate::arch::get_time() as isize
+    crate::hal::arch::get_time() as isize
 }
 
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> isize {

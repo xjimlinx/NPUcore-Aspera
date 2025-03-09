@@ -7,7 +7,7 @@ type BlockDeviceImpl = mem_blk::MemBlockWrapper;
 #[cfg(feature = "block_sata")]
 type BlockDeviceImpl = sata_blk::SataBlock;
 
-use crate::arch::BLOCK_SZ;
+use crate::hal::arch::BLOCK_SZ;
 use alloc::sync::Arc;
 use lazy_static::*;
 

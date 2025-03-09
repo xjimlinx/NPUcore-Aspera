@@ -7,7 +7,7 @@ pub mod signal;
 mod task;
 pub mod threads;
 
-use crate::arch::__switch;
+use crate::hal::arch::__switch;
 use crate::{
     fs::{OpenFlags, ROOT_FD},
     mm::translated_refmut,
@@ -85,11 +85,11 @@ pub fn do_exit(task: Arc<TaskControlBlock>, exit_code: u32) {
     // **** hold current PCB lock
     let mut inner = task.acquire_inner_lock();
     if !task.exit_signal.is_empty() {
-        if let Some(parent) = inner.parent.as_ref(){
+        if let Some(parent) = inner.parent.as_ref() {
             let parent_task = parent.upgrade().unwrap(); // this will acquire inner of current task
             let mut parent_inner = parent_task.acquire_inner_lock();
             parent_inner.add_signal(task.exit_signal);
-    
+
             if parent_inner.task_status == TaskStatus::Interruptible {
                 // wake up parent if parent is waiting.
                 parent_inner.task_status = TaskStatus::Ready;

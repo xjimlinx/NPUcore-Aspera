@@ -2,7 +2,7 @@ use core::convert::{TryFrom, TryInto};
 
 use bit_field::BitField;
 
-use crate::arch::la64::register::MemoryAccessType;
+use crate::hal::arch::loongarch64::register::MemoryAccessType;
 
 // 当前模式信息
 impl_define_csr!(

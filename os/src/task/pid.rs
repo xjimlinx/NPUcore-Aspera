@@ -1,4 +1,4 @@
-pub use crate::arch::{trap_cx_bottom_from_tid, ustack_bottom_from_tid};
+pub use crate::hal::arch::{trap_cx_bottom_from_tid, ustack_bottom_from_tid};
 use alloc::vec::Vec;
 use lazy_static::*;
 use spin::Mutex;
@@ -53,7 +53,7 @@ impl Drop for PidHandle {
     }
 }
 
-pub type KernelStackImpl = crate::arch::KernelStack;
+pub type KernelStackImpl = crate::hal::arch::KernelStack;
 #[inline(always)]
 pub fn kstack_alloc() -> KernelStackImpl {
     KernelStackImpl::new()

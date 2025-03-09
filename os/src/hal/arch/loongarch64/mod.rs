@@ -19,11 +19,11 @@ pub mod syscall_id;
 //use crate::mm::remap_test;
 
 use crate::{
-    arch::la64::{
+    config::{DIR_WIDTH, MMAP_BASE, PAGE_SIZE_BITS, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VESG},
+    hal::arch::loongarch64::{
         board::UART_BASE,
         trap::{set_kernel_trap_entry, set_machine_err_trap_ent},
     },
-    config::{DIR_WIDTH, MMAP_BASE, PAGE_SIZE_BITS, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VESG},
 };
 
 use self::{time::get_timer_freq_first_time, trap::strampoline};
@@ -66,7 +66,7 @@ pub fn pre_start_init() {
 }
 pub fn bootstrap_init() {
     if CPUId::read().get_core_id() != 0 {
-         loop {}
+        loop {}
     };
     ECfg::empty()
         .set_line_based_interrupt_vector(LineBasedInterrupt::TIMER)

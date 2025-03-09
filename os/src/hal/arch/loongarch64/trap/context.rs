@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 
 use crate::{
-    arch::la64::register::PrMd,
+    hal::arch::loongarch64::register::PrMd,
     task::{SignalStack, Signals},
 };
 

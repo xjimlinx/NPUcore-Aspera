@@ -1,5 +1,5 @@
 use super::BlockDevice;
-use crate::{arch::BLOCK_SZ, config::DISK_IMAGE_BASE};
+use crate::{config::DISK_IMAGE_BASE, hal::arch::BLOCK_SZ};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use spin::Mutex;
 struct MemBlock(usize);

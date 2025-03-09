@@ -3,16 +3,16 @@ mod syscall_macro;
 
 pub mod errno;
 pub mod fs;
-mod process;
 mod net;
+mod process;
 
-use crate::arch::syscall_id::*;
+use crate::hal::arch::syscall_id::*;
 use core::convert::TryFrom;
 use fs::*;
 use log::{error, info};
-use process::*;
-pub use process::CloneFlags;
 use net::*;
+pub use process::CloneFlags;
+use process::*;
 pub fn syscall_name(id: usize) -> &'static str {
     match id {
         SYSCALL_DUP => "dup",
@@ -114,7 +114,7 @@ pub fn syscall_name(id: usize) -> &'static str {
         SYSCALL_GETRANDOM => "getrandom",
         // non-standard
         SYSCALL_LS => "ls",
-        SYSCALL_SHUTDOWN =>"shutdown",
+        SYSCALL_SHUTDOWN => "shutdown",
         SYSCALL_CLEAR => "clear",
         _ => "unknown",
     }
@@ -162,7 +162,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
     let ret = match syscall_id {
         SYSCALL_GETCWD => sys_getcwd(args[0], args[1]),
         SYSCALL_DUP => sys_dup(args[0]),
-        SYSCALL_DUP2 => sys_dup2(args[0],args[1]),
+        SYSCALL_DUP2 => sys_dup2(args[0], args[1]),
         SYSCALL_DUP3 => sys_dup3(args[0], args[1], args[2] as u32),
         SYSCALL_FCNTL => sys_fcntl(args[0], args[1] as u32, args[2]),
         SYSCALL_IOCTL => sys_ioctl(args[0], args[1] as u32, args[2]),
@@ -339,25 +339,17 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
         SYSCALL_STATFS => sys_statfs(args[0] as *const u8, args[1] as *mut Statfs),
         SYSCALL_SOCKET => sys_socket(args[0] as u32, args[1] as u32, args[2] as u32),
         SYSCALL_SOCKETPAIR => sys_socketpair(
-            args[0] as u32, 
-            args[1] as u32, 
-            args[2] as u32, 
-            args[3] as usize, 
+            args[0] as u32,
+            args[1] as u32,
+            args[2] as u32,
+            args[3] as usize,
         ),
         SYSCALL_BIND => sys_bind(args[0] as u32, args[1] as usize, args[2] as u32),
         SYSCALL_LISTEN => sys_listen(args[0] as u32, args[1] as u32),
         SYSCALL_ACCEPT => sys_accept(args[0] as u32, args[1] as usize, args[2] as usize),
         SYSCALL_CONNECT => sys_connect(args[0] as u32, args[1] as usize, args[2] as u32),
-        SYSCALL_GETSOCKNAME => sys_getsockname(
-            args[0] as u32,
-            args[1] as usize,
-            args[2] as usize,
-        ),
-        SYSCALL_GETPEERNAME => sys_getpeername(
-            args[0] as u32,
-            args[1] as usize,
-            args[2] as usize,
-        ),
+        SYSCALL_GETSOCKNAME => sys_getsockname(args[0] as u32, args[1] as usize, args[2] as usize),
+        SYSCALL_GETPEERNAME => sys_getpeername(args[0] as u32, args[1] as usize, args[2] as usize),
         SYSCALL_SENDTO => sys_sendto(
             args[0] as u32,
             args[1] as usize,
@@ -388,12 +380,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> isize {
             args[3] as usize,
             args[4] as usize,
         ),
-        SYSCALL_SOCK_SHUTDOWN => sys_sock_shutdown(args[0] as u32,args[1] as u32,),
-        SYSCALL_GETRANDOM => sys_getrandom(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as u32
-        ),
+        SYSCALL_SOCK_SHUTDOWN => sys_sock_shutdown(args[0] as u32, args[1] as u32),
+        SYSCALL_GETRANDOM => sys_getrandom(args[0] as usize, args[1] as usize, args[2] as u32),
         SYSCALL_SHUTDOWN => sys_shutdown(),
         _ => {
             error!(

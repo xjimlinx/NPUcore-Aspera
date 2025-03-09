@@ -18,7 +18,7 @@
 #![allow(dead_code)]
 #![allow(unused_assignments)]
 #![allow(unused_variables)]
-pub use arch::config;
+pub use hal::arch::config;
 extern crate alloc;
 
 #[macro_use]
@@ -26,23 +26,23 @@ extern crate bitflags;
 
 #[macro_use]
 mod console;
-mod arch;
 mod drivers;
 mod fs;
+mod hal;
 mod lang_items;
+mod math;
 mod mm;
+mod net;
 mod syscall;
 mod task;
 mod timer;
-mod net;
 mod utils;
-mod math;
 
-use crate::arch::{bootstrap_init, machine_init};
 #[cfg(feature = "block_mem")]
 use crate::config::DISK_IMAGE_BASE;
-#[cfg(feature = "la64")]
-core::arch::global_asm!(include_str!("arch/la64/entry.asm"));
+use crate::hal::arch::{bootstrap_init, machine_init};
+#[cfg(feature = "loongarch64")]
+core::arch::global_asm!(include_str!("hal/arch/loongarch64/entry.asm"));
 #[cfg(feature = "block_mem")]
 core::arch::global_asm!(include_str!("load_img.S"));
 #[cfg(not(feature = "block_mem"))]
@@ -75,15 +75,13 @@ fn move_to_high_address() {
         fn eimg();
     }
     unsafe {
-        let img = core::slice::from_raw_parts(
-            simg as usize as *mut u8,
-            eimg as usize - simg as usize
-        );
+        let img =
+            core::slice::from_raw_parts(simg as usize as *mut u8, eimg as usize - simg as usize);
         // 从DISK_IMAGE_BASE到MEMORY_END
         let mem_disk = core::slice::from_raw_parts_mut(
             DISK_IMAGE_BASE as *mut u8,
             // 大小为128MB
-            0x800_0000
+            0x800_0000,
         );
         mem_disk.fill(0);
         mem_disk[..img.len()].copy_from_slice(img);

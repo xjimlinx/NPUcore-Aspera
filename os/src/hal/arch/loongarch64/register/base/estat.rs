@@ -1,6 +1,6 @@
 use core::convert::{TryFrom, TryInto};
 
-use crate::arch::la64::{
+use crate::hal::arch::loongarch64::{
     register::{MachineError, TLBRERA},
     MErrCtl,
 };

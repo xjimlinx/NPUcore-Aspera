@@ -1,4 +1,4 @@
-use crate::arch::shutdown;
+use crate::hal::arch::shutdown;
 use core::panic::PanicInfo;
 
 #[panic_handler]

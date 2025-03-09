@@ -1,9 +1,9 @@
 use super::map_area::*;
 use super::page_table::PageTable;
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
-use crate::arch::TrapContext;
-use crate::arch::{MMIO, TICKS_PER_SEC};
 use crate::fs::SeekWhence;
+use crate::hal::arch::TrapContext;
+use crate::hal::arch::{MMIO, TICKS_PER_SEC};
 use crate::syscall::errno::*;
 use crate::task::{
     current_task, trap_cx_bottom_from_tid, ustack_bottom_from_tid, AuxvEntry, AuxvType, ELFInfo,
@@ -113,9 +113,9 @@ impl<T: PageTable> MemorySet<T> {
     /// 由于实现了写时复制（CoW），该空间不会在插入时分配，直到触发页面错误时才会进行分配。
     pub fn insert_program_area(
         &mut self,
-        start_va: VirtAddr,             // 起始虚拟地址
-        permission: MapPermission,      // 内存区域访问权限
-        frames: Vec<Frame>,             // 内存帧状态
+        start_va: VirtAddr,        // 起始虚拟地址
+        permission: MapPermission, // 内存区域访问权限
+        frames: Vec<Frame>,        // 内存帧状态
     ) -> Result<(), ()> {
         let map_area = MapArea::from_existing_frame(start_va, MapType::Framed, permission, frames);
         self.push_no_alloc(map_area)?;
@@ -314,14 +314,20 @@ impl<T: PageTable> MemorySet<T> {
                     let allocated_ppn = match frame {
                         // Page table is not mapped, but frame is in memory.
                         Frame::InMemory(_) => {
-                            info!("[Frame InMemory] addr: {:?}, vpn: {:?}, frame: {:?}", addr, vpn, frame);
+                            info!(
+                                "[Frame InMemory] addr: {:?}, vpn: {:?}, frame: {:?}",
+                                addr, vpn, frame
+                            );
                             unreachable!();
                         }
                         Frame::Unallocated => {
                             info!("[do_page_fault] addr: {:?}, solution: lazy alloc", addr);
                             let ppn = area.map_one_zeroed_unchecked(&mut self.page_table, vpn);
                             let frame = area.inner.get_mut(&vpn);
-                            info!("[do_page_fault map_one] addr: {:?}, vpn: {:?}, frame: {:?}", addr, vpn, frame);
+                            info!(
+                                "[do_page_fault map_one] addr: {:?}, vpn: {:?}, frame: {:?}",
+                                addr, vpn, frame
+                            );
                             ppn
                         }
                         #[cfg(feature = "oom_handler")]

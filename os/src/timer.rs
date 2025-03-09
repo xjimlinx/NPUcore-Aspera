@@ -2,11 +2,10 @@
 use core::cmp::Ordering;
 use core::ops::{Add, AddAssign, Sub};
 
-use crate::arch::get_clock_freq;
-pub use crate::arch::get_time;
+use crate::hal::arch::get_clock_freq;
+pub use crate::hal::arch::get_time;
 
 use core::time::Duration;
-
 
 pub const MSEC_PER_SEC: usize = 1000;
 
@@ -42,11 +41,9 @@ pub fn get_time_ns() -> usize {
     i
 }
 
-
 pub fn current_time_duration() -> Duration {
     Duration::from_micros(get_time_us() as u64)
 }
-
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 /// Traditional UNIX timespec structures represent elapsed time, measured by the system clock

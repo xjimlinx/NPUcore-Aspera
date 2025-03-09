@@ -1,6 +1,6 @@
-use crate::arch::BLOCK_SZ;
-use crate::arch::BUFFER_CACHE_NUM;
 use crate::config::{MEMORY_HIGH_BASE, PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::hal::arch::BLOCK_SZ;
+use crate::hal::arch::BUFFER_CACHE_NUM;
 use crate::mm::{frame_alloc, FrameTracker, KERNEL_SPACE};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -34,7 +34,7 @@ const BUFFER_SIZE: usize = BLOCK_SZ;
 /// 页缓存数量（每页包含块数量）
 const PAGE_BUFFERS: usize = PAGE_SIZE / BUFFER_SIZE;
 
-#[cfg(not(feature = "la64"))]
+#[cfg(not(feature = "loongarch64"))]
 const BUFFER_CACHE_NUM: usize = 16;
 
 /// 缓存池大小

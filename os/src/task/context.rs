@@ -1,4 +1,4 @@
-use crate::arch::trap_return;
+use crate::hal::arch::trap_return;
 
 #[repr(C)]
 pub struct TaskContext {

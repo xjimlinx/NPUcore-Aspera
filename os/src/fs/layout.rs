@@ -1,4 +1,4 @@
-use crate::{arch::BLOCK_SZ, timer::TimeSpec};
+use crate::{hal::arch::BLOCK_SZ, timer::TimeSpec};
 
 bitflags! {
     pub struct OpenFlags: u32 {
@@ -99,7 +99,7 @@ pub struct Stat {
     st_dev: u64,
     /// Inode number
     st_ino: u64,
-    /// File type and mode   
+    /// File type and mode
     st_mode: u32,
     /// Number of hard links
     st_nlink: u32,
@@ -161,7 +161,6 @@ pub struct StatxTimestamp {
     pub __statx_timestamp_pad1: [i32; 1],
 }
 
-
 impl Statx {
     #![allow(unused)]
     /// Get the inode number described in the `Stat`
@@ -199,22 +198,22 @@ impl Statx {
             stx_size,
             stx_blocks: (stx_size as u64 + BLK_SIZE as u64 - 1) / BLK_SIZE as u64,
             stx_attributes_mask: 0,
-            stx_atime: StatxTimestamp{
+            stx_atime: StatxTimestamp {
                 tv_sec: stx_atime_sec,
                 tv_nsec: 0,
                 __statx_timestamp_pad1: [0; 1],
             },
-            stx_btime: StatxTimestamp{
+            stx_btime: StatxTimestamp {
                 tv_sec: stx_ctime_sec,
                 tv_nsec: 0,
                 __statx_timestamp_pad1: [0; 1],
             },
-            stx_ctime: StatxTimestamp{
+            stx_ctime: StatxTimestamp {
                 tv_sec: stx_ctime_sec,
                 tv_nsec: 0,
                 __statx_timestamp_pad1: [0; 1],
             },
-            stx_mtime: StatxTimestamp{
+            stx_mtime: StatxTimestamp {
                 tv_sec: stx_mtime_sec,
                 tv_nsec: 0,
                 __statx_timestamp_pad1: [0; 1],

@@ -2,15 +2,15 @@ use super::manager::TASK_MANAGER;
 use super::pid::{kstack_alloc, RecycleAllocator};
 use super::signal::*;
 use super::threads::Futex;
-use super::trap_cx_bottom_from_tid;
-use super::ustack_bottom_from_tid;
 use super::TaskContext;
 use super::{pid_alloc, KernelStackImpl, PidHandle};
-use crate::arch::TrapImpl;
-use crate::arch::{trap_handler, TrapContext};
 use crate::config::MMAP_BASE;
 use crate::fs::file_descriptor::FdTable;
 use crate::fs::{FileDescriptor, OpenFlags, ROOT_FD};
+use crate::hal::arch::trap_cx_bottom_from_tid;
+use crate::hal::arch::ustack_bottom_from_tid;
+use crate::hal::arch::TrapImpl;
+use crate::hal::arch::{trap_handler, TrapContext};
 use crate::mm::{MemorySet, PageTableImpl, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::net::SocketTable;
 use crate::syscall::CloneFlags;
@@ -42,7 +42,7 @@ pub struct TaskControlBlock {
     pub exe: Arc<Mutex<FileDescriptor>>,
     pub tid_allocator: Arc<Mutex<RecycleAllocator>>,
     pub files: Arc<Mutex<FdTable>>,
-    pub socket_table : Arc<Mutex<SocketTable>>,
+    pub socket_table: Arc<Mutex<SocketTable>>,
     pub fs: Arc<Mutex<FsStatus>>,
     pub vm: Arc<Mutex<MemorySet<PageTableImpl>>>,
     pub sighand: Arc<Mutex<Vec<Option<Box<SigAction>>>>>,
@@ -268,11 +268,7 @@ impl TaskControlBlock {
                 vec.resize(3, tty);
                 vec
             }))),
-            socket_table: Arc::new(
-                Mutex::new(
-                    SocketTable::new(
-
-            ))),
+            socket_table: Arc::new(Mutex::new(SocketTable::new())),
             fs: Arc::new(Mutex::new(FsStatus {
                 working_inode: Arc::new(
                     ROOT_FD
@@ -457,7 +453,9 @@ impl TaskControlBlock {
             } else {
                 Arc::new(Mutex::new(self.files.lock().clone()))
             },
-            socket_table: Arc::new(Mutex::new(SocketTable::from_another(&self.socket_table.clone().lock()).unwrap())),
+            socket_table: Arc::new(Mutex::new(
+                SocketTable::from_another(&self.socket_table.clone().lock()).unwrap(),
+            )),
             fs: if flags.contains(CloneFlags::CLONE_FS) {
                 self.fs.clone()
             } else {

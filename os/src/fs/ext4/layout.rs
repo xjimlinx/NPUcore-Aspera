@@ -1,16 +1,22 @@
 #![allow(unused)]
 use crate::{
     config::PAGE_SIZE,
-    copy_from_name1, copy_to_name1,
     fs::{
-        directory_tree::DirectoryTreeNode, dirent::Dirent, ext4::{
+        directory_tree::DirectoryTreeNode,
+        dirent::Dirent,
+        ext4::{
             block_group::Block,
             direntry::{DirEntryType, Ext4DirEntryTail},
             InodeFileType, PageCache, BLOCK_SIZE,
-        }, file_trait::File, inode::{InodeLock, InodeTrait}, vfs::VFS, DiskInodeType, OpenFlags, SeekWhence, Stat, StatMode
+        },
+        file_trait::File,
+        inode::{InodeLock, InodeTrait},
+        vfs::VFS,
+        DiskInodeType, OpenFlags, SeekWhence, Stat, StatMode,
     },
     lang_items::Bytes,
-    mm::UserBuffer, syscall::errno::{EINVAL, ENOTDIR, ENOTEMPTY},
+    mm::UserBuffer,
+    syscall::errno::{EINVAL, ENOTDIR, ENOTEMPTY},
 };
 use alloc::{
     format,
@@ -164,7 +170,9 @@ impl File for Ext4OSInode {
                     self.file_cache_manager
                         .get_cache(
                             start_cache,
-                            || -> Vec<usize> { self.get_neighboring_blk(start_cache, Arc::new(inode_ref.clone())) },
+                            || -> Vec<usize> {
+                                self.get_neighboring_blk(start_cache, Arc::new(inode_ref.clone()))
+                            },
                             &self.ext4fs.block_device,
                         )
                         .lock()
@@ -207,7 +215,9 @@ impl File for Ext4OSInode {
                     self.file_cache_manager
                         .get_cache(
                             start_cache,
-                            || -> Vec<usize> { self.get_neighboring_blk(start_cache, Arc::new(inode_ref.clone())) },
+                            || -> Vec<usize> {
+                                self.get_neighboring_blk(start_cache, Arc::new(inode_ref.clone()))
+                            },
                             &self.ext4fs.block_device,
                         )
                         .lock()
@@ -252,7 +262,8 @@ impl File for Ext4OSInode {
             Some(mut offset) => {
                 let mut offset = &mut offset;
                 for slice in buf.buffers.iter_mut() {
-                    let read_size = self.read_at_block_cache(*offset, *slice, Arc::new(inode_ref.clone()));
+                    let read_size =
+                        self.read_at_block_cache(*offset, *slice, Arc::new(inode_ref.clone()));
                     if read_size == 0 {
                         break;
                     }
@@ -263,7 +274,8 @@ impl File for Ext4OSInode {
             None => {
                 let mut offset = self.offset.lock();
                 for slice in buf.buffers.iter_mut() {
-                    let read_size = self.read_at_block_cache(*offset, *slice, Arc::new(inode_ref.clone()));
+                    let read_size =
+                        self.read_at_block_cache(*offset, *slice, Arc::new(inode_ref.clone()));
                     if read_size == 0 {
                         break;
                     }
@@ -446,7 +458,13 @@ impl File for Ext4OSInode {
         let inode_ref = self.inode.lock();
         let mut nameoff = 0;
         if inode_mode == InodeFileType::S_IFDIR.bits() {
-            let new_inode_num = self.ext4fs.generic_open(name, &mut inode_ref.inode_num.clone(), true, inode_mode, &mut nameoff);
+            let new_inode_num = self.ext4fs.generic_open(
+                name,
+                &mut inode_ref.inode_num.clone(),
+                true,
+                inode_mode,
+                &mut nameoff,
+            );
             if let Ok(new_inode_num) = new_inode_num {
                 let new_inode_ref = self.ext4fs.get_inode_ref(new_inode_num);
                 return Ok(Arc::new(Self {
@@ -461,7 +479,7 @@ impl File for Ext4OSInode {
                     ext4fs: self.ext4fs.clone(),
                     // maybe wrong
                     file_cache_manager: Arc::new(PageCacheManager::new()),
-                }))
+                }));
             } else {
                 panic!()
             }
@@ -503,7 +521,9 @@ impl File for Ext4OSInode {
     fn unlink(&self, delete: bool) -> Result<(), isize> {
         let inode_ref = self.inode.lock();
         // 若为非空目录
-        if inode_ref.inode.get_file_type() == DiskInodeType::Directory && self.ext4fs.dir_has_entry(inode_ref.inode_num) {
+        if inode_ref.inode.get_file_type() == DiskInodeType::Directory
+            && self.ext4fs.dir_has_entry(inode_ref.inode_num)
+        {
             return Err(ENOTEMPTY);
         }
         // 若为空目录
@@ -517,8 +537,15 @@ impl File for Ext4OSInode {
             self.ext4fs.truncate_inode(&mut child_inode_ref, 0)?;
             // TODO:
             // This maybe wrong
-            println!("[kernel in unlink] unlink name: {:?}", self_dir_tree_node.upgrade().unwrap().name);
-            self.ext4fs.unlink(&mut parent_inode_ref, &mut child_inode_ref, self_dir_tree_node.upgrade().unwrap().name.as_str());
+            println!(
+                "[kernel in unlink] unlink name: {:?}",
+                self_dir_tree_node.upgrade().unwrap().name
+            );
+            self.ext4fs.unlink(
+                &mut parent_inode_ref,
+                &mut child_inode_ref,
+                self_dir_tree_node.upgrade().unwrap().name.as_str(),
+            );
             self.ext4fs.write_back_inode(&mut parent_inode_ref);
         }
         // 若为常规文件
@@ -613,7 +640,7 @@ impl File for Ext4OSInode {
 
         // drop(inode_lock);
 
-        if diff >0 {
+        if diff > 0 {
             todo!()
         } else {
             self.file_cache_manager.notify_new_size(new_size as usize);
@@ -666,7 +693,9 @@ impl File for Ext4OSInode {
         let inner_cache_id = offset >> 12;
         let result = self.file_cache_manager.get_cache(
             inner_cache_id,
-            || -> Vec<usize> { self.get_neighboring_blk(inner_cache_id, Arc::new(inode_ref.clone())) },
+            || -> Vec<usize> {
+                self.get_neighboring_blk(inner_cache_id, Arc::new(inode_ref.clone()))
+            },
             &self.ext4fs.block_device,
         );
         Ok(result)
@@ -694,7 +723,10 @@ impl File for Ext4OSInode {
         let mut cache_list = Vec::<Arc<Mutex<PageCache>>>::with_capacity(cache_num);
         // 使用自身的get_single_cache方法
         for cache_id in 0..cache_num {
-            cache_list.push(self.get_single_cache_new(cache_id << 12, Arc::new(inode_ref.clone())).unwrap())
+            cache_list.push(
+                self.get_single_cache_new(cache_id << 12, Arc::new(inode_ref.clone()))
+                    .unwrap(),
+            )
             // cache_list.push(self.get_single_cache(cache_id).unwrap())
         }
         Ok(cache_list)
@@ -717,7 +749,11 @@ impl File for Ext4OSInode {
 }
 
 impl Ext4OSInode {
-    pub fn get_neighboring_blk(&self, inner_cache_id: usize, inode_ref: Arc<Ext4InodeRef>) -> Vec<usize> {
+    pub fn get_neighboring_blk(
+        &self,
+        inner_cache_id: usize,
+        inode_ref: Arc<Ext4InodeRef>,
+    ) -> Vec<usize> {
         // fat32下是通过clus_list以及inner_cache_id
         // 所以这里也需要有一个类似的block_list以及inner_cache_id
         // 这里的block_list需要是data_block_list
@@ -757,7 +793,12 @@ impl Ext4OSInode {
         block_ids
     }
 
-    pub fn read_at_block_cache(&self, offset: usize, buffer: &mut [u8], inode_ref: Arc<Ext4InodeRef>) -> usize {
+    pub fn read_at_block_cache(
+        &self,
+        offset: usize,
+        buffer: &mut [u8],
+        inode_ref: Arc<Ext4InodeRef>,
+    ) -> usize {
         let mut start = offset;
         let size = inode_ref.inode.size() as usize;
         // 比较大小，看要读取多大
@@ -799,7 +840,11 @@ impl Ext4OSInode {
         read_size
     }
     /// 获取单个缓存页
-    fn get_single_cache_new(&self, offset: usize, inode_ref: Arc<Ext4InodeRef>) -> Result<Arc<Mutex<PageCache>>, ()> {
+    fn get_single_cache_new(
+        &self,
+        offset: usize,
+        inode_ref: Arc<Ext4InodeRef>,
+    ) -> Result<Arc<Mutex<PageCache>>, ()> {
         // 传入的 offset 实际上是cache号，或者说是第几个块
         // TODO:
         // 写到此处的时候还没有搞透彻pagecache到底是
@@ -814,46 +859,48 @@ impl Ext4OSInode {
         let inner_cache_id = offset >> 12;
         let result = self.file_cache_manager.get_cache(
             inner_cache_id,
-            || -> Vec<usize> { {
-                let this = &self;
-                // fat32下是通过clus_list以及inner_cache_id
-                // 所以这里也需要有一个类似的block_list以及inner_cache_id
-                // 这里的block_list需要是data_block_list
-                // 那么如何获取其数据块列表？
+            || -> Vec<usize> {
+                {
+                    let this = &self;
+                    // fat32下是通过clus_list以及inner_cache_id
+                    // 所以这里也需要有一个类似的block_list以及inner_cache_id
+                    // 这里的block_list需要是data_block_list
+                    // 那么如何获取其数据块列表？
 
-                // 计算缓存页内包含的逻辑块范围
-                let byts_per_blk = BLOCK_SIZE;
-                let blk_per_cache = PageCacheManager::CACHE_SZ / BLOCK_SIZE;
-                // 计算数据块起始块号和结束块号
-                // inner_cache_id 从0开始，到(文件大小 + 4KB - 1)/4KB
-                let mut blk_id = inner_cache_id * blk_per_cache;
+                    // 计算缓存页内包含的逻辑块范围
+                    let byts_per_blk = BLOCK_SIZE;
+                    let blk_per_cache = PageCacheManager::CACHE_SZ / BLOCK_SIZE;
+                    // 计算数据块起始块号和结束块号
+                    // inner_cache_id 从0开始，到(文件大小 + 4KB - 1)/4KB
+                    let mut blk_id = inner_cache_id * blk_per_cache;
 
-                // 初始化用于存储缓存页面需要加载的数据块号集合
-                let mut block_ids = Vec::with_capacity(blk_per_cache);
+                    // 初始化用于存储缓存页面需要加载的数据块号集合
+                    let mut block_ids = Vec::with_capacity(blk_per_cache);
 
-                let file_size = inode_ref.inode.size() as usize;
-                // 获取所占数据块数
-                let blk_cnts = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-                for _ in 0..blk_per_cache {
-                    if blk_id >= blk_cnts {
-                        // println!(
-                        //     "[kernel in get_neighboring_blk] blk_id is out of bound, blk_id: {}, blk_cnts: {}",
-                        //     blk_id, blk_cnts
-                        // );
-                        break;
+                    let file_size = inode_ref.inode.size() as usize;
+                    // 获取所占数据块数
+                    let blk_cnts = (file_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+                    for _ in 0..blk_per_cache {
+                        if blk_id >= blk_cnts {
+                            // println!(
+                            //     "[kernel in get_neighboring_blk] blk_id is out of bound, blk_id: {}, blk_cnts: {}",
+                            //     blk_id, blk_cnts
+                            // );
+                            break;
+                        }
+                        // 获取物理块号
+                        // 此处可能有问题
+                        let start_block_id = this
+                            .ext4fs
+                            .get_pblock_idx(&inode_ref, blk_id as u32)
+                            .unwrap();
+                        block_ids.push(start_block_id as usize);
+                        blk_id += 1;
                     }
-                    // 获取物理块号
-                    // 此处可能有问题
-                    let start_block_id = this
-                        .ext4fs
-                        .get_pblock_idx(&inode_ref, blk_id as u32)
-                        .unwrap();
-                    block_ids.push(start_block_id as usize);
-                    blk_id += 1;
+                    // println!("[kernel in get_neighboring_blk] block_ids: {:?}", block_ids);
+                    block_ids
                 }
-                // println!("[kernel in get_neighboring_blk] block_ids: {:?}", block_ids);
-                block_ids
-            } },
+            },
             &self.ext4fs.block_device,
         );
         Ok(result)
@@ -861,12 +908,7 @@ impl Ext4OSInode {
 }
 
 impl Ext4OSInode {
-    fn update_block_cache(
-        &self,
-        offset: usize,
-        buf: &[u8],
-        inode_ref: Arc<Ext4InodeRef>
-    ) -> usize {
+    fn update_block_cache(&self, offset: usize, buf: &[u8], inode_ref: Arc<Ext4InodeRef>) -> usize {
         let mut start = offset;
         let old_size = inode_ref.inode.get_file_size() as usize;
         let diff_len = buf.len() as isize + offset as isize - old_size as isize;
