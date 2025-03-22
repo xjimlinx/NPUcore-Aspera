@@ -7,7 +7,6 @@ use super::*;
 use crate::syscall::errno::SUCCESS;
 use alloc::vec;
 use alloc::vec::Vec;
-use embedded_hal::serial;
 
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
@@ -266,7 +265,7 @@ impl ExtentNode {
                 let header = self.header;
                 let mut l = 1;
                 let mut r = header.entries_count as usize - 1;
-                while l <= r{
+                while l <= r {
                     let m = l + (r - l) / 2;
                     let idx = 3 + m * 3;
                     let ext = Ext4Extent::load_from_u32(&root_data[idx..]);
@@ -1033,10 +1032,8 @@ impl Ext4FileSystem {
                     i -= 1;
                     continue;
                 }
-                let ext4block = Block::load_offset(
-                    self.block_device.clone(),
-                    node_pblock * BLOCK_SIZE,
-                );
+                let ext4block =
+                    Block::load_offset(self.block_device.clone(), node_pblock * BLOCK_SIZE);
 
                 let header = search_path.path[i as usize].header;
                 let entries_count = header.entries_count;
