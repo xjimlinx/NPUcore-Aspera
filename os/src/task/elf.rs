@@ -1,3 +1,7 @@
+/*
+    此文件用于解析ELF文件
+    内容与RISCV版本相同，无需修改
+*/
 use alloc::boxed::Box;
 
 use crate::{
@@ -74,35 +78,53 @@ impl AuxvEntry {
 
 #[repr(C)]
 pub struct ELFInfo {
+    // 入口地址
     pub entry: usize,
+    // 解析器入口地址
     pub interp_entry: Option<usize>,
+    // 基地址
     pub base: usize,
+    // 程序头表条目数量
     pub phnum: usize,
+    // 程序头表条目大小
     pub phent: usize,
+    // 程序头表地址
     pub phdr: usize,
 }
 
+/// 加载ELF解释器
 pub fn load_elf_interp(path: &str) -> Result<&'static [u8], isize> {
+    // 只读方式打开指定path的文件
     match ROOT_FD.open(path, OpenFlags::O_RDONLY, false) {
         Ok(file) => {
+            // 文件大小小于ELF文件头大小
             if file.get_size() < 4 {
                 return Err(ELIBBAD);
             }
+            // 读取文件头的前4个字节，即魔数'\x7fELF'
             let mut magic_number = Box::<[u8; 4]>::new([0; 4]);
             // this operation may be expensive... I'm not sure
+            // 原作者注释：这个操作可能很昂贵...我不确定
             file.read(Some(&mut 0usize), magic_number.as_mut_slice());
+            // 匹配魔数
             match magic_number.as_slice() {
+                // 正确情况
                 b"\x7fELF" => {
+                    // 获取内核空间的最高地址
                     let buffer_addr = KERNEL_SPACE.lock().highest_addr();
+                    // 在内核空间的最高地址来分配一个缓冲区
                     let buffer = unsafe {
                         core::slice::from_raw_parts_mut(buffer_addr.0 as *mut u8, file.get_size())
                     };
+                    // 获取文件的所有缓存
                     let caches = file.get_all_caches().unwrap();
+                    // 将缓存内容映射到frame中
                     let frames = caches
                         .iter()
                         .map(|cache| Frame::InMemory(cache.try_lock().unwrap().get_tracker()))
                         .collect();
 
+                    // 将文件内容映射到内核空间
                     crate::mm::KERNEL_SPACE
                         .lock()
                         .insert_program_area(
@@ -114,6 +136,7 @@ pub fn load_elf_interp(path: &str) -> Result<&'static [u8], isize> {
 
                     return Ok(buffer);
                 }
+                // 不是ELF文件
                 _ => Err(ELIBBAD),
             }
         }
