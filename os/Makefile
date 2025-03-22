@@ -3,9 +3,24 @@
 # gdb: 只运行gdb（需要先通过make run来编译）
 # clean: 清除编译结果
 
+include make/qemu.mk
+include make/platform.mk
+
+# could also be riscv64
+ARCH := loongarch64
+
 TARGET := loongarch64-unknown-linux-gnu
+
+ifeq ($(ARCH), riscv64)
+	TARGET = riscv64gc-unknown-none-elf
+endif
+
 MODE := debug
 FS_MODE ?= fat32
+
+# for riscv
+RUSTSBI_ELF := ../rustsbi/target/riscv64gc-unknown-none-elf/release/rustsbi-k210
+RUSTSBI_BIN := $(RUSTSBI_ELF).bin
 
 KERNEL_ELF = target/$(TARGET)/$(MODE)/os
 KERNEL_BIN = $(KERNEL_ELF).bin
@@ -17,8 +32,11 @@ LDBOARD = la2k1000
 # 大写K转小写
 ifeq ($(BOARD), 2K1000)
 	BOARD = 2k1000
+else ifeq ($(BOARD), K210)
+	BOARD = k210
 endif
 
+# 块设备类型
 BLOCK ?= mem
 
 # Binutils
