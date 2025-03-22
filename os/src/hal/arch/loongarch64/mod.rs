@@ -1,4 +1,4 @@
-#[path = "board/2k1000.rs"]
+#[path = "../../platform/loongarch64/2k1000.rs"]
 pub mod board;
 pub mod config;
 pub mod laflex;
@@ -14,7 +14,6 @@ pub type PageTableImpl = laflex::LAFlexPageTable;
 pub use sbi::{console_flush, console_getchar, console_putchar, shutdown};
 pub use switch::__switch;
 pub use tlb::{tlb_global_invalidate, tlb_invalidate};
-pub mod syscall_id;
 
 //use crate::mm::remap_test;
 
@@ -28,7 +27,7 @@ use crate::{
 
 use self::{time::get_timer_freq_first_time, trap::strampoline};
 pub use board::BLOCK_SZ;
-pub use kern_stack::{trap_cx_bottom_from_tid, ustack_bottom_from_tid, KernelStack};
+pub use kern_stack::{kstack_alloc, trap_cx_bottom_from_tid, ustack_bottom_from_tid, KernelStack};
 pub use register::*;
 mod kern_stack;
 mod la_libc_import;

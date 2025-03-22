@@ -16,7 +16,7 @@ pub use loongarch64::{
     KernelPageTableImpl,
     PageTableImpl,
     __switch,
-    syscall_id,
+    kstack_alloc,
     // tlb_global_invalidate,
     tlb_invalidate,
     trap::{
@@ -28,3 +28,5 @@ pub use loongarch64::{
     KernelStack,
     BLOCK_SZ,
 };
+#[cfg(feature = "riscv")]
+mod riscv;

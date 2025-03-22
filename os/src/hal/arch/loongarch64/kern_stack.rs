@@ -28,3 +28,8 @@ pub fn trap_cx_bottom_from_tid(tid: usize) -> usize {
 pub fn ustack_bottom_from_tid(tid: usize) -> usize {
     USER_STACK_BASE - tid * (PAGE_SIZE + USER_STACK_SIZE)
 }
+
+#[inline(always)]
+pub fn kstack_alloc() -> KernelStack {
+    KernelStack::new()
+}

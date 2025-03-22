@@ -5,8 +5,8 @@ use embedded_hal::serial::nb::{Read, Write};
 use crate::drivers::Ns16550a;
 use core::{arch::asm, mem::MaybeUninit};
 
-use super::board::UART_BASE;
 use super::acpi::Pm1Cnt;
+use super::board::UART_BASE;
 
 pub static mut UART: Ns16550a = Ns16550a { base: UART_BASE };
 
