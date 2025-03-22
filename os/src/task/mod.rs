@@ -23,9 +23,7 @@ pub use manager::{
     sleep_interruptible, wait_with_timeout, wake_interruptible,
 };
 // pub use pid::RecycleAllocator;
-pub use pid::{
-    pid_alloc, trap_cx_bottom_from_tid, ustack_bottom_from_tid, KernelStackImpl, PidHandle,
-};
+pub use pid::{pid_alloc, trap_cx_bottom_from_tid, ustack_bottom_from_tid, PidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
 };

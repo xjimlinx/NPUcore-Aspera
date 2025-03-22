@@ -1,15 +1,16 @@
 use super::manager::TASK_MANAGER;
-use super::pid::{kstack_alloc, RecycleAllocator};
+use super::pid::RecycleAllocator;
 use super::signal::*;
 use super::threads::Futex;
 use super::TaskContext;
-use super::{pid_alloc, KernelStackImpl, PidHandle};
+use super::{pid_alloc, PidHandle};
 use crate::config::MMAP_BASE;
 use crate::fs::file_descriptor::FdTable;
 use crate::fs::{FileDescriptor, OpenFlags, ROOT_FD};
 use crate::hal::arch::trap_cx_bottom_from_tid;
 use crate::hal::arch::ustack_bottom_from_tid;
 use crate::hal::arch::TrapImpl;
+use crate::hal::arch::{kstack_alloc, KernelStack};
 use crate::hal::arch::{trap_handler, TrapContext};
 use crate::mm::{MemorySet, PageTableImpl, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::net::SocketTable;
@@ -33,7 +34,7 @@ pub struct TaskControlBlock {
     pub pid: PidHandle,
     pub tid: usize,
     pub tgid: usize,
-    pub kstack: KernelStackImpl,
+    pub kstack: KernelStack,
     pub ustack_base: usize,
     pub exit_signal: Signals,
     // mutable
