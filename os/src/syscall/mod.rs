@@ -5,14 +5,15 @@ pub mod errno;
 pub mod fs;
 mod net;
 mod process;
+mod syscall_id;
 
-use crate::hal::arch::syscall_id::*;
 use core::convert::TryFrom;
 use fs::*;
 use log::{error, info};
 use net::*;
 pub use process::CloneFlags;
 use process::*;
+use syscall_id::*;
 pub fn syscall_name(id: usize) -> &'static str {
     match id {
         SYSCALL_DUP => "dup",
