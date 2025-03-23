@@ -43,6 +43,8 @@ use crate::config::DISK_IMAGE_BASE;
 use crate::hal::arch::{bootstrap_init, machine_init};
 #[cfg(feature = "loongarch64")]
 core::arch::global_asm!(include_str!("hal/arch/loongarch64/entry.asm"));
+#[cfg(feature = "riscv")]
+core::arch::global_asm!(include_str!("hal/arch/riscv/entry.asm"));
 #[cfg(feature = "block_mem")]
 core::arch::global_asm!(include_str!("load_img.S"));
 #[cfg(not(feature = "block_mem"))]
@@ -68,7 +70,8 @@ fn mem_clear() {
     }
 }
 
-#[cfg(feature = "block_mem")]
+// 这一行可能有误，需要后续处理
+#[cfg(all(feature = "block_mem", feature = "loongarch64"))]
 fn move_to_high_address() {
     extern "C" {
         fn simg();
@@ -90,9 +93,11 @@ fn move_to_high_address() {
 
 #[no_mangle]
 pub fn rust_main() -> ! {
+    #[cfg(feature = "loongarch64")]
     bootstrap_init();
     mem_clear();
-    #[cfg(feature = "block_mem")]
+    // 这一行可能有误，需要后续处理
+    #[cfg(all(feature = "block_mem", feature = "loongarch64"))]
     move_to_high_address();
     console::log_init();
     println!("[kernel] Console initialized.");

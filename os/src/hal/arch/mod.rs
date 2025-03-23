@@ -30,3 +30,18 @@ pub use loongarch64::{
 };
 #[cfg(feature = "riscv")]
 mod riscv;
+#[cfg(feature = "riscv")]
+pub use riscv::{
+    __switch, board,
+    board::MMIO,
+    bootstrap_init, config,
+    config::BUFFER_CACHE_NUM,
+    console_flush, console_getchar, console_putchar, kstack_alloc, machine_init, shutdown,
+    time::{get_clock_freq, get_time, TICKS_PER_SEC},
+    tlb_invalidate,
+    trap::{
+        get_bad_addr, get_bad_instruction, get_exception_cause, trap_handler, trap_return,
+        MachineContext, TrapContext, TrapImpl, UserContext,
+    },
+    trap_cx_bottom_from_tid, ustack_bottom_from_tid, KernelStack, BLOCK_SZ,
+};

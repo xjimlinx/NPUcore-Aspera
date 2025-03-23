@@ -1,13 +1,14 @@
-use crate::{
-    hal::arch::{console_flush, console_putchar},
-    task::current_task,
-};
+#[cfg(feature = "loongarch64")]
+use crate::hal::arch::console_flush;
+use crate::hal::arch::console_putchar;
+use crate::task::current_task;
 use core::fmt::{self, Write};
 use log::{self, Level, LevelFilter, Log, Metadata, Record};
 
 // won't require lock, but unlikely to cause problem
 struct KernelOutput;
 
+#[cfg(feature = "loongarch64")]
 impl Write for KernelOutput {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let mut i = 0;
@@ -21,6 +22,16 @@ impl Write for KernelOutput {
         }
         if i != 0 {
             console_flush();
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "riscv")]
+impl Write for KernelOutput {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        for c in s.chars() {
+            console_putchar(c as usize);
         }
         Ok(())
     }
