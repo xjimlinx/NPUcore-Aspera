@@ -39,6 +39,8 @@ smoltcp = { version = "0.10.0", default-features = false, features = [
     "socket-dhcpv4",
     "async",
 ] }
+riscv = { path = "../dependency/riscv", features = ["inline-asm"] }
+rustsbi = { path = "../dependency/rustsbi" }
 
 [features]
 zero_init = []
