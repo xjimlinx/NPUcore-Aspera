@@ -11,8 +11,10 @@ use crate::{
 pub struct GeneralRegs {
     pub pc: usize,
     pub ra: usize,
+    /// 线程指针寄存器
     pub tp: usize,
     pub sp: usize,
+    /// 传参寄存器
     pub a0: usize,
     pub a1: usize,
     pub a2: usize,
@@ -136,7 +138,7 @@ impl UserContext {
 #[derive(Clone, Copy)]
 /// The trap cotext containing the user context and the supervisor level
 pub struct TrapContext {
-    /// The registers to be preserved.
+    /// 通用寄存器
     pub gp: GeneralRegs,
     pub fp: FloatRegs,
     /// A copy of register a0, useful when we need to restart syscall

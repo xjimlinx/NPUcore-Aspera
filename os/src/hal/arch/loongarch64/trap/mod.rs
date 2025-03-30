@@ -24,8 +24,6 @@ use register::{
     TLBRERA,
 };
 pub type TrapImpl = Trap;
-//pub type InterruptImpl = Interrupt;
-//pub type ExceptionImpl = Exception;
 global_asm!(include_str!("trap.S"));
 
 extern "C" {

@@ -21,15 +21,18 @@ impl KernelStack {
     }
 }
 
+/// 根据线程id计算trap context的地址
 pub fn trap_cx_bottom_from_tid(tid: usize) -> usize {
     TRAP_CONTEXT_BASE - tid * PAGE_SIZE
 }
 
+/// 根据线程id计算用户栈的地址
 pub fn ustack_bottom_from_tid(tid: usize) -> usize {
     USER_STACK_BASE - tid * (PAGE_SIZE + USER_STACK_SIZE)
 }
 
 #[inline(always)]
+/// 分配一个内核栈
 pub fn kstack_alloc() -> KernelStack {
     KernelStack::new()
 }
