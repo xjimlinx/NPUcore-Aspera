@@ -1,5 +1,7 @@
 pub mod config;
 pub mod kern_stack;
+pub mod trap;
+pub mod rv_pagetable;
 
 pub fn machine_init() {
     trap::init();
@@ -7,6 +9,8 @@ pub fn machine_init() {
     timer::set_next_trigger();
 }
 
+pub use tlb::tlb_invalidate;
+mod tlb;
 mod context;
 use core::arch::{asm, global_asm};
 

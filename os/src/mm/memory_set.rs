@@ -61,15 +61,17 @@ pub enum MemoryError {
 
 /// The memory "space" as in user space or kernel space
 pub struct MemorySet<T: PageTable> {
+    /// 页表实现
     page_table: T,
-    /// The mapped area.
-    /// Segments are implemented using this mechanism. In other words, they may be considered a subset of MapArea.
-    /// Yet, other purposes may exist in this struct, such as file mapping.
+    /// 映射的区域向量
+    /// 段是使用这种机制实现的，换句话说，它们可以被认为是MapArea的一个子集
+    /// 但是，这个结构体中可能存在其他用途，比如说文件映射
     areas: Vec<MapArea>,
 }
 
 impl<T: PageTable> MemorySet<T> {
     /// Create a new struct with no information at all.
+    /// 创建一个新的内核空间内存集，使用内核页表
     pub fn new_bare_kern() -> Self {
         Self {
             page_table: T::new_kern_space(),
@@ -246,6 +248,7 @@ impl<T: PageTable> MemorySet<T> {
         }
         unreachable!();
     }
+    /// 返回最高处地址
     pub fn highest_addr(&self) -> VirtAddr {
         self.areas.last().unwrap().get_end::<T>().into()
     }
