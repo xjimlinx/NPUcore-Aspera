@@ -431,9 +431,13 @@ pub fn sys_brk(brk_addr: usize) -> isize {
 bitflags! {
     pub struct CloneFlags: u32 {
         //const CLONE_NEWTIME         =   0x00000080;
+        /// 决定是否共享虚拟内存空间
         const CLONE_VM              =   0x00000100;
+        /// 决定是否共享文件系统信息（如当前工作目录和根目录）
         const CLONE_FS              =   0x00000200;
+        /// 使新进程共享打开的文件描述符表，但不共享文件描述符的状态
         const CLONE_FILES           =   0x00000400;
+        /// 使新进程共享信号处理
         const CLONE_SIGHAND         =   0x00000800;
         const CLONE_PIDFD           =   0x00001000;
         const CLONE_PTRACE          =   0x00002000;
@@ -449,10 +453,15 @@ bitflags! {
         const CLONE_UNTRACED        =   0x00800000;
         const CLONE_CHILD_SETTID    =   0x01000000;
         const CLONE_NEWCGROUP       =   0x02000000;
+        /// 使新进程拥有一个新的、独立的UTS命名空间，可以隔离主机名和域名
         const CLONE_NEWUTS          =   0x04000000;
+        /// 使新进程拥有一个新的、独立的IPC命名空间，可以隔离System V IPC和POSIX消息队列
         const CLONE_NEWIPC          =   0x08000000;
+        /// 使新进程拥有一个新的、独立的用户命名空间，可以隔离用户和用户组ID
         const CLONE_NEWUSER         =   0x10000000;
+        /// 使新进程拥有一个新的、独立的PID命名空间，可以隔离进程ID
         const CLONE_NEWPID          =   0x20000000;
+        /// 使新进程拥有一个新的、独立的网络命名空间，可以隔离网络设备、协议栈和端口
         const CLONE_NEWNET          =   0x40000000;
         const CLONE_IO              =   0x80000000;
     }
@@ -853,9 +862,9 @@ bitflags! {
     }
 }
 
-/// # Description
+/// # 描述
 /// fast user-space locking
-/// # Arguments
+/// # 参数
 /// * `uaddr`: `usize`, the address to the futex word;
 /// * `futex_op`: `u32`, the operation to perform on the futex;
 /// The remaining arguments (val, timeout, uaddr2, and val3) are re‐
