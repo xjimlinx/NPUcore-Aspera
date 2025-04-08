@@ -1,7 +1,9 @@
 #![allow(unused)]
 use super::DiskInodeType;
 use crate::fs::vfs::VFSDirEnt;
-use crate::{copy_from_name1, copy_to_name1, lang_items::Bytes};
+#[cfg(feature = "loongarch64")]
+use crate::{copy_from_name1, copy_to_name1};
+use crate::{lang_items::Bytes};
 use alloc::{
     format,
     string::{String, ToString},
@@ -589,6 +591,20 @@ pub struct FATLongDirEnt {
 }
 
 impl FATLongDirEnt {
+    pub fn empty() -> Self {
+        Self {
+            ord: 0u8,
+            name1: [0u16; 5],
+            attr: FATDiskInodeType::AttrLongName,
+            ldir_type: 0u8,
+            chk_sum: 0u8,
+            name2: [0u16; 6],
+            fst_clus_lo: 0u16,
+            name3: [0u16; 2],
+        }
+    }
+
+    #[cfg(feature = "loongarch64")]
     pub fn from_name_slice(is_last_ent: bool, order: usize, partial_name: [u16; 13]) -> Self {
         let mut dir_ent = FATDirEnt::empty();
         let mut long_ent = unsafe { dir_ent.long_entry };
@@ -616,6 +632,28 @@ impl FATLongDirEnt {
 
         long_ent
     }
+    #[cfg(feature = "riscv")]
+    pub fn from_name_slice(is_last_ent: bool, order: usize, partial_name: [u16; 13]) -> Self {
+        let mut long_ent = Self::empty();
+
+        unsafe {
+            core::ptr::addr_of_mut!(long_ent.name1)
+                .write_unaligned(partial_name[..5].try_into().expect("Failed to cast!"));
+            core::ptr::addr_of_mut!(long_ent.name2)
+                .write_unaligned(partial_name[5..11].try_into().expect("Failed to cast!"));
+            core::ptr::addr_of_mut!(long_ent.name3)
+                .write_unaligned(partial_name[11..].try_into().expect("Failed to cast!"));
+        }
+        debug_assert!(order < 0x47);
+        long_ent.ord = order as u8;
+        if is_last_ent {
+            long_ent.ord |= LAST_LONG_ENTRY;
+        }
+
+        long_ent
+    }
+
+    #[cfg(feature = "loongarch64")]
     pub fn name(&self) -> String {
         let mut name_all: [u16; LONG_DIR_ENT_NAME_CAPACITY] = [0u16; LONG_DIR_ENT_NAME_CAPACITY];
         copy_from_name1!(name_all[..5], self.name1);
@@ -627,6 +665,22 @@ impl FATLongDirEnt {
                 (self.name3)
             )));
         }
+
+        let len = (0..name_all.len())
+            .find(|i| name_all[*i] == 0)
+            .unwrap_or(name_all.len());
+        String::from_utf16_lossy(&name_all[..len])
+    }
+
+    #[cfg(feature = "riscv")]
+    pub fn name(&self) -> String {
+        let mut name_all: [u16; LONG_DIR_ENT_NAME_CAPACITY] = [0u16; LONG_DIR_ENT_NAME_CAPACITY];
+
+        name_all[..5].copy_from_slice(unsafe { &core::ptr::addr_of!(self.name1).read_unaligned() });
+        name_all[5..11]
+            .copy_from_slice(unsafe { &core::ptr::addr_of!(self.name2).read_unaligned() });
+        name_all[11..]
+            .copy_from_slice(unsafe { &core::ptr::addr_of!(self.name3).read_unaligned() });
 
         let len = (0..name_all.len())
             .find(|i| name_all[*i] == 0)
