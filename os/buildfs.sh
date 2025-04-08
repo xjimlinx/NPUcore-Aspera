@@ -1,15 +1,16 @@
 SUDO=$(if [ $(whoami) = "root" ]; then echo -n ""; else echo -n "sudo"; fi)
 U_FS_DIR="../fs-img-dir"
-U_FS=$1
+U_FS="$1"
 BLK_SZ="512"
 TARGET=riscv64gc-unknown-none-elf
 MODE="release"
 if [ $# -ge 2 ]; then
-    if [ "$2"="2k1000" -o "$2"="laqemu" ]; then
+    if [ "$2" = "2k1000" ] || [ "$2" = "laqemu" ]; then
         TARGET=loongarch64-unknown-linux-gnu
         BLK_SZ="2048"
     else
-        TARGET=$2
+        TARGET=riscv64gc-unknown-none-elf
+        BLK_SZ="2048"
     fi
 fi
 
@@ -78,9 +79,17 @@ if [ ! -f ${U_FS_DIR}/fs/syscall ]; then
     "$SUDO" mkdir -p ${U_FS_DIR}/fs/syscall
 fi
 
-try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_FS_DIR}/fs/
-try_copy ../user/fs ${U_FS_DIR}/fs/
-try_copy ../live/splice-test ${U_FS_DIR}/fs/
+if [ "$2" = "laqemu" ]; then
+    try_copy ../user/busybox_lua_testsuites/${ARCH} ${U_FS_DIR}/fs/
+    try_copy ../user/fs ${U_FS_DIR}/fs/
+    try_copy ../live/splice-test ${U_FS_DIR}/fs/
+fi
+
+if [ "$2" = "rvqemu" ]; then
+    sudo cp -r ./bash-rv ${U_FS_DIR}/fs/bin/bash
+    sudo cp -r ../user/target/riscv64gc-unknown-none-elf/release/initproc ${U_FS_DIR}/fs/
+    sudo cp -r ../1.txt ${U_FS_DIR}/fs/
+fi
 
 "$SUDO" umount ${U_FS_DIR}/fs
 echo "DONE"
