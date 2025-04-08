@@ -1,3 +1,12 @@
+use alloc::{sync::Arc, vec::Vec};
+
+use crate::{
+    console::print,
+    mm::{frame_alloc, FrameTracker, MapPermission, PhysAddr, PhysPageNum, VirtAddr, VirtPageNum},
+};
+
+use super::tlb_invalidate;
+
 bitflags! {
     /// Page Table Entry flags
     pub struct PTEFlags: u8 {
@@ -121,7 +130,7 @@ impl RVPageTable {
     /// Find the page in the page table, creating the page on the way if not exists.
     /// Note: It does NOT create the terminal node. The caller must verify its validity and create according to his own needs.
     fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut RVPageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut RVPageTableEntry> = None;
         for i in 0..3 {
@@ -143,7 +152,7 @@ impl RVPageTable {
     }
     /// Find the page table entry denoted by vpn, returning Some(&_) if found or None if not.
     fn find_pte(&self, vpn: VirtPageNum) -> Option<&RVPageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&RVPageTableEntry> = None;
         for i in 0..3 {
@@ -161,7 +170,7 @@ impl RVPageTable {
     }
     /// Find and return reference the page table entry denoted by `vpn`, `None` if not found.
     fn find_pte_refmut(&self, vpn: VirtPageNum) -> Option<&mut RVPageTableEntry> {
-        let idxs = vpn.indexes();
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut RVPageTableEntry> = None;
         for i in 0..3 {

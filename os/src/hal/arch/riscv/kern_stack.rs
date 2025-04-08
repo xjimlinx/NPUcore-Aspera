@@ -1,10 +1,11 @@
 use super::config::{
-    KERNEL_STACK_SIZE, PAGE_SIZE, TRAP_CONTEXT_BASE, USER_STACK_BASE, USER_STACK_SIZE,
+    KERNEL_STACK_SIZE, PAGE_SIZE, TRAP_CONTEXT_BASE, USER_STACK_BASE, USER_STACK_SIZE, TRAMPOLINE
 };
 use crate::mm::{MapPermission, VirtAddr, KERNEL_SPACE};
 use alloc::vec::Vec;
 use lazy_static::*;
 use spin::Mutex;
+use crate::task::pid::RecycleAllocator;
 lazy_static! {
     static ref KSTACK_ALLOCATOR: Mutex<RecycleAllocator> = Mutex::new(RecycleAllocator::new());
 }
