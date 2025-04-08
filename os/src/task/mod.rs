@@ -1,7 +1,7 @@
 mod context;
 mod elf;
 mod manager;
-mod pid;
+pub mod pid;
 mod processor;
 pub mod signal;
 mod task;

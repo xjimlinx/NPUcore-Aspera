@@ -31,18 +31,20 @@ pub use loongarch64::{
     BLOCK_SZ,
 };
 #[cfg(feature = "riscv")]
-mod riscv;
+pub mod riscv;
+#[cfg(feature = "riscv")]
+pub use riscv::MachineContext;
 #[cfg(feature = "riscv")]
 pub use riscv::{
-    bootstrap_init, config,
-    config::BUFFER_CACHE_NUM,
-    config::MEMORY_END,
-    console_flush, console_getchar, console_putchar, kstack_alloc, machine_init, shutdown,
-    time::{get_clock_freq, get_time, TICKS_PER_SEC},
-    tlb_invalidate,
-    trap::{
-        get_bad_addr, get_bad_instruction, get_exception_cause, trap_handler, trap_return,
-        MachineContext, Trap, TrapContext, UserContext,
-    },
-    trap_cx_bottom_from_tid, ustack_bottom_from_tid, KernelStack, BLOCK_SZ,
+    config, config::BLOCK_SZ, config::KERNEL_HEAP_SIZE, config::MEMORY_END,
+    kern_stack::kstack_alloc, kern_stack::trap_cx_bottom_from_tid,
+    kern_stack::ustack_bottom_from_tid, kern_stack::KernelStack, machine_init,
+    rv_pagetable::RVPageTable, sbi::console_getchar, sbi::set_timer, sbi::shutdown,
+    switch::__switch, tlb_invalidate, trap::context::TrapContext, trap::trap_handler,
+    trap::trap_return, trap::UserContext,
 };
+#[cfg(feature = "riscv")]
+#[path = "../platform/riscv/qemu.rs"]
+pub mod rv_board;
+#[cfg(feature = "riscv")]
+pub use crate::timer::get_time;

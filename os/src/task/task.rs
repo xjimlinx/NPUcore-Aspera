@@ -9,10 +9,13 @@ use crate::fs::file_descriptor::FdTable;
 use crate::fs::{FileDescriptor, OpenFlags, ROOT_FD};
 use crate::hal::arch::trap_cx_bottom_from_tid;
 use crate::hal::arch::ustack_bottom_from_tid;
+#[cfg(feature = "loongarch64")]
 use crate::hal::arch::TrapImpl;
 use crate::hal::arch::{kstack_alloc, KernelStack};
 use crate::hal::arch::{trap_handler, TrapContext};
-use crate::mm::{MemorySet, PageTableImpl, PhysPageNum, VirtAddr, KERNEL_SPACE};
+#[cfg(feature = "loongarch64")]
+use crate::mm::PageTableImpl;
+use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::net::SocketTable;
 use crate::syscall::CloneFlags;
 use crate::timer::{ITimerVal, TimeVal};
@@ -23,6 +26,8 @@ use alloc::vec::Vec;
 use core::fmt::{self, Debug, Formatter};
 use log::trace;
 use spin::{Mutex, MutexGuard};
+#[cfg(feature = "riscv")]
+use riscv::register::scause::{Trap, Interrupt};
 
 #[derive(Clone)]
 /// 任务的文件系统状态

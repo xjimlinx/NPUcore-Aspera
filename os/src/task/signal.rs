@@ -1,13 +1,18 @@
+#[cfg(feature = "loongarch64")]
 use crate::hal::arch::{
-    get_bad_instruction, get_exception_cause, MachineContext, TrapContext, UserContext,
+    get_bad_instruction, get_exception_cause, MachineContext, get_bad_addr
 };
+#[cfg(feature = "loongarch64")]
+use crate::signal_type;
+use crate::hal::arch::UserContext;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt::{self, Debug, Formatter};
 use core::mem::size_of;
 use log::{debug, error, trace, warn};
 
-use crate::hal::arch::get_bad_addr;
+use crate::hal::arch::TrapContext;
+
 use crate::mm::{
     copy_from_user, copy_to_user, translated_ref, translated_refmut, try_get_from_user,
 };
@@ -15,7 +20,7 @@ use crate::syscall::errno::*;
 use crate::task::manager::wait_with_timeout;
 use crate::task::{block_current_and_run_next, exit_current_and_run_next, exit_group_and_run_next};
 use crate::timer::TimeSpec;
-use crate::{config::*, signal_type};
+use crate::config::*;
 
 use super::current_task;
 
@@ -321,7 +326,7 @@ pub struct SigAction {
     pub restorer: usize,
 }
 
-#[cfg(feature = "ricv")]
+#[cfg(feature = "riscv")]
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct SigAction {
@@ -614,6 +619,10 @@ pub fn do_signal() {
 
 #[cfg(feature = "riscv")]
 pub fn do_signal() {
+    use riscv::register::{scause::{self, Exception, Trap}, stval};
+
+    use crate::hal::arch::riscv::MachineContext;
+
     let task = current_task().unwrap();
     let mut inner = task.acquire_inner_lock();
     while let Some(signum) = inner.sigpending.difference(inner.sigmask).peek_front() {

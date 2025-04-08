@@ -2,8 +2,12 @@
 use core::cmp::Ordering;
 use core::ops::{Add, AddAssign, Sub};
 
-use crate::hal::arch::get_clock_freq;
-pub use crate::hal::arch::get_time;
+#[cfg(feature = "riscv")]
+use crate::hal::arch::rv_board::CLOCK_FREQ;
+#[cfg(feature = "riscv")]
+pub const TICKS_PER_SEC: usize = 25;
+#[cfg(feature = "loongarch64")]
+pub use crate::hal::arch::{get_clock_freq, get_time};
 
 use core::time::Duration;
 
@@ -17,24 +21,53 @@ pub const NSEC_PER_MSEC: usize = 1_000_000;
 pub const NSEC_PER_USEC: usize = 1_000;
 
 /// Return current time measured by seconds.
+#[cfg(feature = "loongarch64")]
 pub fn get_time_sec() -> usize {
     let i = get_time() / (get_clock_freq());
     //log::info!("[timer.rs] get_time(): {},sec: {}", get_time(), i);
     i
 }
+
+/// Return current time measured by seconds.
+#[cfg(feature = "riscv")]
+pub fn get_time_sec() -> usize {
+    use riscv::register::time;
+    let i = time::read() / (CLOCK_FREQ);
+    //log::info!("[timer.rs] time::read(): {},sec: {}", time::read(), i);
+    i
+}
 /// Return current time measured by ms.
+#[cfg(feature = "loongarch64")]
 pub fn get_time_ms() -> usize {
     let i = get_time() / (get_clock_freq() / MSEC_PER_SEC);
     //log::info!("[timer.rs] get_time(): {},ms: {}", get_time(), i);
     i
 }
+#[cfg(feature = "riscv")]
+pub fn get_time_ms() -> usize {
+    let i = riscv::register::time::read() / (CLOCK_FREQ / MSEC_PER_SEC);
+    //log::info!("[timer.rs] time::read(): {},ms: {}", time::read(), i);
+    i
+}
+
 /// Return current time measured by us.
+#[cfg(feature = "loongarch64")]
 pub fn get_time_us() -> usize {
     let i = get_time() / (get_clock_freq() / USEC_PER_SEC);
     //log::info!("[timer.rs] get_time(): {},us: {}", get_time(), i);
     i
 }
+
+#[cfg(feature = "riscv")]
+/// Return current time measured by us.
+pub fn get_time_us() -> usize {
+    let i = riscv::register::time::read() / (CLOCK_FREQ / USEC_PER_SEC);
+    //log::info!("[timer.rs] time::read(): {},us: {}", time::read(), i);
+    i
+}
+
 /// Return current time measured by nano seconds.
+#[cfg(feature = "loongarch64")]
 pub fn get_time_ns() -> usize {
     let i = get_time() * NSEC_PER_SEC / (get_clock_freq());
     //log::info!("[timer.rs] get_time(): {},ns: {}", get_time(), i);
@@ -115,10 +148,16 @@ impl TimeSpec {
         }
     }
     pub fn from_tick(tick: usize) -> Self {
-        Self {
+        #[cfg(feature = "loongarch64")]
+        return Self {
             tv_sec: tick / get_clock_freq(),
             tv_nsec: (tick % get_clock_freq()) * NSEC_PER_SEC / get_clock_freq(),
-        }
+        };
+        #[cfg(feature = "riscv")]
+        return Self {
+            tv_sec: tick / CLOCK_FREQ,
+            tv_nsec: (tick % CLOCK_FREQ) * NSEC_PER_SEC / CLOCK_FREQ,
+        };
     }
     pub fn from_s(s: usize) -> Self {
         Self {
@@ -175,13 +214,22 @@ impl TimeVal {
         }
     }
     pub fn from_tick(tick: usize) -> Self {
-        Self {
+        #[cfg(feature = "loongarch64")]
+        return Self {
             tv_sec: tick / get_clock_freq(),
             tv_usec: (tick % get_clock_freq()) * USEC_PER_SEC / get_clock_freq(),
-        }
+        };
+        #[cfg(feature = "riscv")]
+        return Self {
+            tv_sec: tick / CLOCK_FREQ,
+            tv_usec: (tick % CLOCK_FREQ) * USEC_PER_SEC / CLOCK_FREQ,
+        };
     }
     pub fn to_tick(&self) -> usize {
-        self.tv_sec * get_clock_freq() + self.tv_usec * get_clock_freq() / USEC_PER_SEC
+        #[cfg(feature = "loongarch64")]
+        return self.tv_sec * get_clock_freq() + self.tv_usec * get_clock_freq() / USEC_PER_SEC;
+        #[cfg(feature = "riscv")]
+        return self.tv_sec * CLOCK_FREQ + self.tv_usec * CLOCK_FREQ / USEC_PER_SEC;
     }
     pub fn from_s(s: usize) -> Self {
         Self {
@@ -296,4 +344,16 @@ pub struct Times {
 pub enum TimeRange {
     TimeSpec(TimeSpec),
     TimeVal(TimeVal),
+}
+
+#[cfg(feature = "riscv")]
+/// Set next trigger.
+pub fn set_next_trigger() {
+    use crate::hal::arch::set_timer;
+    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+}
+
+#[cfg(feature = "riscv")]
+pub fn get_time() -> usize {
+    riscv::register::time::read()
 }

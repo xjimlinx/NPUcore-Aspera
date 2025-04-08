@@ -1,4 +1,6 @@
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
+#[cfg(feature = "riscv")]
+use crate::hal::arch::riscv::rv_pagetable::RVPageTableEntry;
 use core::fmt::{self, Debug, Formatter};
 
 #[repr(C)]
@@ -109,8 +111,15 @@ impl VirtAddr {
     }
     /// 计算地址在页内的偏移量
     pub fn page_offset(&self) -> usize {
-        let c = PAGE_SIZE - 1;
-        self.0 & (c)
+        #[cfg(feature = "loongarch64")]
+        {
+            let c = PAGE_SIZE - 1;
+            self.0 & (c)
+        }
+        #[cfg(feature = "riscv")]
+        {
+            self.0 & (PAGE_SIZE - 1)
+        }
     }
     /// 检查地址是否页对齐
     pub fn aligned(&self) -> bool {
@@ -233,9 +242,9 @@ impl PhysPageNum {
         unsafe { core::slice::from_raw_parts_mut((pa.0) as *mut T, 512) }
     }
     #[cfg(feature = "riscv")]
-    pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
+    pub fn get_pte_array(&self) -> &'static mut [RVPageTableEntry] {
         let pa: PhysAddr = self.clone().into();
-        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
+        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut RVPageTableEntry, 512) }
     }
     /// 获取整个页的字节数组
     pub fn get_bytes_array(&self) -> &'static mut [u8] {

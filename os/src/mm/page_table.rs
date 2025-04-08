@@ -1,6 +1,9 @@
 use core::ops::IndexMut;
 
+#[cfg(feature = "loongarch64")]
 use super::memory_set::check_page_fault;
+#[cfg(feature = "riscv")]
+pub use {super::memory_set_rv::check_page_fault, crate::hal::arch::RVPageTable};
 use super::{MapPermission, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -114,7 +117,7 @@ pub fn translated_byte_buffer_append_to_existing_vec(
     ptr: *const u8,
     len: usize,
 ) -> Result<(), isize> {
-    let page_table = PageTable::from_token(token);
+    let page_table = RVPageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
     while start < end {
@@ -185,7 +188,7 @@ pub fn translated_byte_buffer(
     ptr: *const u8,
     len: usize,
 ) -> Result<Vec<&'static mut [u8]>, isize> {
-    let page_table = PageTable::from_token(token);
+    let page_table = RVPageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
     let mut v = Vec::with_capacity(32);
