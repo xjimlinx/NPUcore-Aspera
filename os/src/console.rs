@@ -1,6 +1,7 @@
 #[cfg(feature = "loongarch64")]
-use crate::hal::arch::console_flush;
-use crate::hal::arch::console_putchar;
+use crate::hal::arch::{console_flush, console_putchar};
+#[cfg(feature = "riscv")]
+use crate::hal::arch::riscv::sbi::console_putchar;
 use crate::task::current_task;
 use core::fmt::{self, Write};
 use log::{self, Level, LevelFilter, Log, Metadata, Record};
