@@ -3,7 +3,6 @@ pub mod kern_stack;
 pub mod rv_pagetable;
 pub mod sbi;
 pub mod switch;
-pub mod time;
 pub mod trap;
 
 pub fn machine_init() {
