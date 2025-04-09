@@ -33,7 +33,7 @@ pub const SIGNAL_TRAMPOLINE: usize = TRAMPOLINE - PAGE_SIZE;
 pub const TRAP_CONTEXT_BASE: usize = SIGNAL_TRAMPOLINE - PAGE_SIZE;
 
 pub const MEMORY_PHYS: usize = 0x800_0000;
-pub const DISK_IMAGE_BASE: usize = 0x9000_0000 + MEMORY_PHYS;
+pub const DISK_IMAGE_BASE: usize = 0x8000_0000 + MEMORY_PHYS;
 // pub const DISK_IMAGE_BASE: usize = MEMORY_END;
 
 pub const SYSTEM_TASK_LIMIT: usize = 128;
