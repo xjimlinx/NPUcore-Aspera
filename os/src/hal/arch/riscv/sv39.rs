@@ -170,7 +170,7 @@ impl PageTable for Sv39PageTable {
     {
         let frame = frame_alloc().unwrap();
         Sv39PageTable {
-            root_ppn: PhysPageNum(frame.ppn.0 << 32),
+            root_ppn: frame.ppn,
             frames: {
                 let mut vec = Vec::with_capacity(256);
                 vec.push(frame);
