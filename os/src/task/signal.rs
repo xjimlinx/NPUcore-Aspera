@@ -1,18 +1,17 @@
-#[cfg(feature = "loongarch64")]
-use crate::hal::arch::{
-    get_bad_instruction, get_exception_cause, MachineContext, get_bad_addr
+use crate::hal::{
+    get_bad_addr, get_bad_instruction, get_exception_cause, MachineContext, UserContext,
 };
 #[cfg(feature = "loongarch64")]
 use crate::signal_type;
-use crate::hal::arch::UserContext;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::fmt::{self, Debug, Formatter};
 use core::mem::size_of;
 use log::{debug, error, trace, warn};
 
-use crate::hal::arch::TrapContext;
+use crate::hal::TrapContext;
 
+use crate::config::*;
 use crate::mm::{
     copy_from_user, copy_to_user, translated_ref, translated_refmut, try_get_from_user,
 };
@@ -20,7 +19,6 @@ use crate::syscall::errno::*;
 use crate::task::manager::wait_with_timeout;
 use crate::task::{block_current_and_run_next, exit_current_and_run_next, exit_group_and_run_next};
 use crate::timer::TimeSpec;
-use crate::config::*;
 
 use super::current_task;
 
@@ -434,7 +432,6 @@ impl SignalStack {
     }
 }
 
-#[cfg(feature = "loongarch64")]
 /// 执行信号处理
 /// 在从内核返回到用户空间前调用
 pub fn do_signal() {
@@ -582,179 +579,6 @@ pub fn do_signal() {
                         inner.get_trap_cx().gp.pc,
                         );
                     };
-                    drop(inner);
-                    drop(sighand);
-                    drop(task);
-                    exit_group_and_run_next(signal.to_signum().unwrap() as u32);
-                }
-                // the current process we are handing is sure to be in RUNNING status, so just ignore SIGCONT
-                // where we really wake up this process is where we sent SIGCONT, such as `sys_kill()`
-                Signals::SIGCHLD | Signals::SIGCONT | Signals::SIGURG | Signals::SIGWINCH => {
-                    trace!("[do_signal] Ignore {:?}", signal);
-                    continue;
-                }
-                // stop (or we should say block) current process
-                Signals::SIGTSTP | Signals::SIGTTIN | Signals::SIGTTOU => {
-                    drop(inner);
-                    drop(sighand);
-                    drop(task);
-                    block_current_and_run_next();
-                    // because this loop require `inner`, and we have `drop(inner)` above, so `break` is compulsory
-                    // this would cause some signals won't be handled immediately when this process resumes
-                    // but it doesn't matter, maybe
-                    break;
-                }
-                // for all other signals, we should terminate current process
-                _ => {
-                    warn!("[do_signal] process terminated due to {:?}", signal);
-                    drop(inner);
-                    drop(sighand);
-                    drop(task);
-                    exit_group_and_run_next(signal.to_signum().unwrap() as u32);
-                }
-            }
-        }
-    }
-}
-
-#[cfg(feature = "riscv")]
-pub fn do_signal() {
-    use riscv::register::{scause::{self, Exception, Trap}, stval};
-
-    use crate::hal::arch::riscv::MachineContext;
-
-    let task = current_task().unwrap();
-    let mut inner = task.acquire_inner_lock();
-    while let Some(signum) = inner.sigpending.difference(inner.sigmask).peek_front() {
-        let signal = Signals::from_bits_truncate(1 << (signum - 1));
-        inner.sigpending.remove(signal);
-        trace!(
-            "[do_signal] signal: {:?}, pending: {:?}, sigmask: {:?}",
-            signal,
-            inner.sigpending,
-            inner.sigmask
-        );
-        let mut sighand = task.sighand.lock();
-        // user-defined handler
-        if let Some(act) = &sighand[signum - 1] {
-            let trap_cx = inner.get_trap_cx();
-            // if this syscall wants to restart
-            if scause::read().cause() == Trap::Exception(Exception::UserEnvCall)
-                && trap_cx.gp.a0 == ERESTART as usize
-            {
-                // and if `SA_RESTART` is set
-                if act.flags.contains(SigActionFlags::SA_RESTART) {
-                    debug!("[do_signal] syscall will restart after sigreturn");
-                    // back to `ecall`
-                    trap_cx.gp.pc -= 4;
-                    // restore syscall parameter `a0`
-                    trap_cx.gp.a0 = trap_cx.origin_a0;
-                } else {
-                    debug!("[do_signal] syscall was interrupted");
-                    // will return EINTR after sigreturn
-                    trap_cx.gp.a0 = EINTR as usize;
-                }
-            }
-            let ucontext_addr = (trap_cx.gp.sp - size_of::<UserContext>()) & !0x7;
-            let siginfo_addr = (ucontext_addr - size_of::<SigInfo>()) & !0x7;
-            // check if we have enough space on user stack
-            let sig_sp = siginfo_addr;
-            let sig_size = sig_sp.checked_sub(task.ustack_base - USER_STACK_SIZE);
-            if let Some(sig_size) = sig_size {
-                let token = task.get_user_token();
-                // In this case, signal hander have three parameters
-                if act.flags.contains(SigActionFlags::SA_SIGINFO) {
-                    copy_to_user(
-                        token,
-                        &UserContext {
-                            flags: 0,
-                            link: 0,
-                            stack: SignalStack::new(sig_sp, sig_size),
-                            sigmask: inner.sigmask,
-                            __pad: [0; UserContext::PADDING_SIZE],
-                            mcontext: unsafe {
-                                *(trap_cx as *const TrapContext).cast::<MachineContext>()
-                            },
-                        },
-                        ucontext_addr as *mut UserContext,
-                    ); // push UserContext into user stack
-                    trap_cx.gp.a2 = ucontext_addr; // a2 <- *UserContext
-                    copy_to_user(
-                        token,
-                        &SigInfo::new(signum, 0, 0),
-                        siginfo_addr as *mut SigInfo,
-                    ); // push SigInfo into user stack
-                    trap_cx.gp.a1 = siginfo_addr; // a1 <- *SigInfo
-                                                  // In this case, signal handler only have one parameter (a0 <- signum), so only copy something necessary
-                                                  // To simplify the implementation of sigreturn, here we keep the same layout as above...
-                } else {
-                    *translated_refmut(
-                        token,
-                        (ucontext_addr + 2 * size_of::<usize>() + size_of::<SignalStack>())
-                            as *mut Signals,
-                    )
-                    .unwrap() = inner.sigmask; // push sigmask into user stack
-                    copy_to_user(
-                        token,
-                        (trap_cx as *const TrapContext).cast::<MachineContext>(),
-                        (ucontext_addr
-                            + 2 * size_of::<usize>()
-                            + size_of::<SignalStack>()
-                            + size_of::<Signals>()
-                            + UserContext::PADDING_SIZE)
-                            as *mut MachineContext,
-                    ); // push MachineContext into user stack
-                }
-                trap_cx.gp.a0 = signum; // a0 <- signum
-                trap_cx.set_sp(sig_sp); // update sp, because we've pushed something into stack
-                trap_cx.gp.ra = if act.flags.contains(SigActionFlags::SA_RESTORER) {
-                    act.restorer // legacy, signal trampoline provided by C library's wrapper function
-                } else {
-                    SIGNAL_TRAMPOLINE // ra <- __call_sigreturn, when handler ret, we will go to __call_sigreturn
-                };
-                trap_cx.gp.pc = act.handler.addr().unwrap(); // restore pc with addr of handler
-            } else {
-                error!(
-                    "[do_signal] User stack will overflow after push trap context! Send SIGSEGV."
-                );
-                drop(inner);
-                drop(sighand);
-                drop(task);
-                exit_current_and_run_next(Signals::SIGSEGV.to_signum().unwrap() as u32);
-            }
-            trace!(
-                "[do_signal] signal: {:?}, signum: {:?}, handler: {:?} (ra: 0x{:X}, sp: 0x{:X})",
-                signal,
-                signum,
-                act.handler,
-                trap_cx.gp.ra,
-                trap_cx.gp.sp
-            );
-            // mask some signals
-            inner.sigmask |= if act.flags.contains(SigActionFlags::SA_NODEFER) {
-                act.mask - Signals::CAN_NOT_BE_MASKED
-            } else {
-                (signal | act.mask) - Signals::CAN_NOT_BE_MASKED
-            };
-            if act.flags.contains(SigActionFlags::SA_RESETHAND) {
-                sighand[signum - 1] = None;
-            }
-            // go back to `trap_return`
-            return;
-        } else {
-            // user program doesn't register a handler for this signal, use our default handler
-            match signal {
-                // caused by a specific instruction in user program, print log here before exit
-                Signals::SIGILL | Signals::SIGSEGV => {
-                    let scause = scause::read();
-                    let stval = stval::read();
-                    warn!("[do_signal] process terminated due to {:?}", signal);
-                    println!(
-                        "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, core dumped.",
-                        scause.cause(),
-                        stval,
-                        inner.get_trap_cx().gp.pc,
-                    );
                     drop(inner);
                     drop(sighand);
                     drop(task);

@@ -1,29 +1,22 @@
 pub mod address;
 mod frame_allocator;
 mod heap_allocator;
-#[cfg(feature = "loongarch64")]
 mod map_area;
-#[cfg(feature = "loongarch64")]
 mod memory_set;
-#[cfg(feature = "riscv")]
-mod memory_set_rv;
 mod page_table;
 #[cfg(feature = "zram")]
 mod zram;
+pub use crate::hal::{KernelPageTableImpl, PageTableImpl};
 pub use address::PPNRange;
 use address::VPNRange;
 pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 pub use frame_allocator::{
     frame_alloc, frame_alloc_uninit, frame_dealloc, frame_reserve, unallocated_frames, FrameTracker,
 };
-#[cfg(feature = "loongarch64")]
 pub use map_area::{Frame, MapFlags, MapPermission};
-#[cfg(feature = "loongarch64")]
-pub use memory_set::{MemoryError, MemorySet, KERNEL_SPACE};
-#[cfg(feature = "riscv")]
-pub use memory_set_rv::{
-    remap_test, Frame, MapFlags, MapPermission, MemoryError, MemorySet, KERNEL_SPACE,
-};
+pub use memory_set::kernel_token;
+pub use memory_set::MemoryError;
+pub use memory_set::{MemorySet, KERNEL_SPACE};
 pub use page_table::{
     copy_from_user,
     copy_from_user_array,
@@ -41,15 +34,13 @@ pub use page_table::{
     UserBuffer,
     // UserBufferIterator,
 };
-#[cfg(feature = "loongarch64")]
-pub use {crate::hal::arch::KernelPageTableImpl, crate::hal::arch::PageTableImpl};
 
 pub fn init() {
     heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();
     KERNEL_SPACE.lock().activate();
 }
-pub use crate::hal::arch::tlb_invalidate;
+pub use crate::hal::tlb_invalidate;
 
 #[macro_export]
 /// Convert user pointer trg to `Some(*trg)` or `None` if null.

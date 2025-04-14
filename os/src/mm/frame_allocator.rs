@@ -1,7 +1,7 @@
 #[cfg(feature = "oom_handler")]
 use super::super::fs;
 use super::{PhysAddr, PhysPageNum};
-use crate::hal::arch::MEMORY_END;
+use crate::hal::MEMORY_END;
 #[cfg(feature = "oom_handler")]
 use crate::task::current_task;
 
@@ -64,25 +64,17 @@ pub struct StackFrameAllocator {
 }
 
 impl StackFrameAllocator {
-    /// 清理内容
-    pub fn clear(&mut self, l: PhysPageNum, r: PhysPageNum) {
-        self.current = l.0;
-        self.end = r.0;
-    }
     /// 初始化方法
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
-        self.clear(l, r);
+        self.current = l.0;
+        self.end = r.0;
         let last_frames = self.end - self.current;
         self.recycled.reserve(last_frames);
         println!("last {} Physical Frames.", last_frames);
     }
     /// 计算未分配的大小
-    pub fn cal(&self) -> usize {
-        self.end - self.current + self.recycled.len()
-    }
-    /// 计算未分配的大小
     pub fn unallocated_frames(&self) -> usize {
-        self.cal()
+        self.end - self.current + self.recycled.len()
     }
 }
 

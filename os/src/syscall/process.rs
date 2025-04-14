@@ -1,7 +1,7 @@
 use crate::config::{PAGE_SIZE, SYSTEM_TASK_LIMIT, USER_STACK_SIZE};
 use crate::fs::OpenFlags;
-use crate::hal::arch::shutdown;
-use crate::hal::arch::{MachineContext, TrapContext};
+use crate::hal::shutdown;
+use crate::hal::{MachineContext, TrapContext};
 use crate::mm::{
     copy_from_user, copy_to_user, copy_to_user_string, get_from_user, translated_byte_buffer,
     translated_ref, translated_refmut, translated_str, try_get_from_user, MapFlags, MapPermission,
@@ -1083,7 +1083,7 @@ pub fn sys_sigreturn() -> isize {
             + 2 * size_of::<usize>()
             + size_of::<SignalStack>()
             + size_of::<Signals>()
-            + crate::hal::arch::UserContext::PADDING_SIZE) as *mut MachineContext,
+            + crate::hal::UserContext::PADDING_SIZE) as *mut MachineContext,
         (trap_cx as *mut TrapContext).cast::<MachineContext>(),
     )
     .unwrap(); // restore trap_cx
@@ -1107,7 +1107,7 @@ pub fn sys_times(buf: *mut Times) -> isize {
         return EFAULT;
     };
     // return clock ticks that have elapsed since an arbitrary point in the past
-    crate::hal::arch::get_time() as isize
+    crate::hal::get_time() as isize
 }
 
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> isize {

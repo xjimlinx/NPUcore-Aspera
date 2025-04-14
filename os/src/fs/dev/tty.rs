@@ -4,7 +4,7 @@ use crate::fs::file_trait::File;
 use crate::fs::layout::Stat;
 use crate::fs::DiskInodeType;
 use crate::fs::StatMode;
-use crate::hal::arch::console_getchar;
+use crate::hal::console_getchar;
 use crate::mm::{copy_from_user, copy_to_user};
 use crate::mm::{translated_ref, translated_refmut, UserBuffer};
 use crate::syscall::errno::*;

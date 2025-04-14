@@ -1,14 +1,16 @@
-use super::map_area::*;
 use super::page_table::PageTable;
+use super::{map_area::*, KernelPageTableImpl, PageTableImpl};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
+use crate::config::*;
 use crate::fs::SeekWhence;
-use crate::hal::arch::TrapContext;
-use crate::hal::arch::{MMIO, TICKS_PER_SEC};
+use crate::hal::TrapContext;
+use crate::hal::{MMIO, TICKS_PER_SEC};
+#[cfg(feature = "loongarch64")]
+use crate::should_map_trampoline;
 use crate::syscall::errno::*;
 use crate::task::{
     current_task, trap_cx_bottom_from_tid, ustack_bottom_from_tid, AuxvEntry, AuxvType, ELFInfo,
 };
-use crate::{config::*, should_map_trampoline};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -36,7 +38,6 @@ lazy_static! {
 }
 
 /// Return the root PPN of kernel space
-#[allow(unused)]
 pub fn kernel_token() -> usize {
     KERNEL_SPACE.lock().token()
 }
@@ -233,6 +234,7 @@ impl<T: PageTable> MemorySet<T> {
         self.areas.push(map_area);
         Ok(())
     }
+    #[cfg(feature = "loongarch64")]
     pub fn last_mmap_area_idx(&self) -> Option<usize> {
         for (idx, area) in self.areas.iter().enumerate().rev().skip(SKIP_NUM) {
             let start_vpn = area.get_start::<T>();
@@ -248,6 +250,23 @@ impl<T: PageTable> MemorySet<T> {
         }
         unreachable!();
     }
+    #[cfg(feature = "riscv")]
+    pub fn last_mmap_area_idx(&self) -> Option<usize> {
+        for (idx, area) in self.areas.iter().enumerate().rev().skip(SKIP_NUM) {
+            let start_vpn = area.get_start::<T>();
+            if start_vpn >= VirtAddr::from(MMAP_END).into() {
+                continue;
+            } else if start_vpn >= VirtAddr::from(MMAP_BASE).into()
+                && start_vpn < VirtAddr::from(MMAP_END).into()
+            {
+                return Some(idx);
+            } else {
+                return None;
+            }
+        }
+        unreachable!();
+    }
+
     /// 返回最高处地址
     pub fn highest_addr(&self) -> VirtAddr {
         self.areas.last().unwrap().get_end::<T>().into()
@@ -380,6 +399,7 @@ impl<T: PageTable> MemorySet<T> {
             Err(MemoryError::BadAddress)
         }
     }
+    #[cfg(feature = "loongarch64")]
     #[cfg(feature = "oom_handler")]
     pub fn do_shallow_clean(&mut self) -> usize {
         let page_table = &mut self.page_table;
@@ -394,6 +414,22 @@ impl<T: PageTable> MemorySet<T> {
             .map(|area| area.do_oom(page_table))
             .sum()
     }
+    #[cfg(feature = "riscv")]
+    #[cfg(feature = "oom_handler")]
+    pub fn do_shallow_clean(&mut self) -> usize {
+        let page_table = &mut self.page_table;
+        self.areas
+            .iter_mut()
+            .filter(|area| {
+                let start_vpn = area.get_start::<T>();
+                start_vpn.0 >= (MMAP_BASE >> PAGE_SIZE_BITS)
+                    && start_vpn.0 < (TASK_SIZE >> PAGE_SIZE_BITS)
+                    && area.map_file.is_none()
+            })
+            .map(|area| area.do_oom(page_table))
+            .sum()
+    }
+    #[cfg(feature = "loongarch64")]
     #[cfg(feature = "oom_handler")]
     pub fn do_deep_clean(&mut self) -> usize {
         let page_table = &mut self.page_table;
@@ -404,6 +440,24 @@ impl<T: PageTable> MemorySet<T> {
             })
             .map(|area| {
                 if area.get_start::<T>().0 < USR_MMAP_BASE >> PAGE_SIZE_BITS {
+                    area.force_swap(page_table)
+                } else {
+                    area.do_oom(page_table)
+                }
+            })
+            .sum()
+    }
+    #[cfg(feature = "riscv")]
+    #[cfg(feature = "oom_handler")]
+    pub fn do_deep_clean(&mut self) -> usize {
+        let page_table = &mut self.page_table;
+        self.areas
+            .iter_mut()
+            .filter(|area| {
+                area.get_start::<T>().0 < (TASK_SIZE >> PAGE_SIZE_BITS) && area.map_file.is_none()
+            })
+            .map(|area| {
+                if area.get_start::<T>().0 < MMAP_BASE >> PAGE_SIZE_BITS {
                     area.force_swap(page_table)
                 } else {
                     area.do_oom(page_table)
@@ -430,11 +484,18 @@ impl<T: PageTable> MemorySet<T> {
     /// 创建一个空的内核空间
     /// Without kernel stacks. (Is it done with .bss?)
     pub fn new_kernel() -> Self {
+        #[cfg(feature = "loongarch64")]
         let mut memory_set = Self::new_bare_kern();
+        #[cfg(feature = "riscv")]
+        let mut memory_set = Self::new_bare();
         // map trampoline
+        // TODO: 这里两者不一样，是为什么？
+        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
+        #[cfg(feature = "riscv")]
+        memory_set.map_trampoline();
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
@@ -624,9 +685,12 @@ impl<T: PageTable> MemorySet<T> {
     pub fn from_elf(elf_data: &[u8]) -> Result<(Self, usize, ELFInfo), isize> {
         let mut memory_set = Self::new_bare();
         // map trampoline
+        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
+        #[cfg(feature = "riscv")]
+        memory_set.map_trampoline();
         // map signaltrampoline
         memory_set.map_signaltrampoline();
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
@@ -637,9 +701,12 @@ impl<T: PageTable> MemorySet<T> {
     pub fn from_existing_user(user_space: &mut MemorySet<T>) -> MemorySet<T> {
         let mut memory_set = Self::new_bare();
         // map trampoline
+        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
+        #[cfg(feature = "riscv")]
+        memory_set.map_trampoline();
         // map signaltrampoline
         memory_set.map_signaltrampoline();
         // map data sections/user heap/mmap area/user stack
@@ -793,7 +860,14 @@ impl<T: PageTable> MemorySet<T> {
                 }
                 area.get_end::<T>().into()
             } else {
-                USR_MMAP_BASE.into()
+                #[cfg(feature = "loongarch64")]
+                {
+                    USR_MMAP_BASE.into()
+                }
+                #[cfg(feature = "riscv")]
+                {
+                    MMAP_BASE.into()
+                }
             }
         };
         let mut new_area = MapArea::new(
@@ -819,6 +893,7 @@ impl<T: PageTable> MemorySet<T> {
             }
         }
         // insert MapArea and keep the order
+        #[cfg(feature = "loongarch64")]
         if let Some((idx, _)) = self
             .areas
             .iter()
@@ -831,6 +906,21 @@ impl<T: PageTable> MemorySet<T> {
             error!("[MemorySet::mmap] No area found higher than new_area {:?} in beginning address. TRAMPOLINES may have been mapped to wrong places!",new_area);
             self.areas.push(new_area);
         }
+        #[cfg(feature = "riscv")]
+        // 2023 NPUcore+版本直接使用的unwrap
+        if let Some((idx, _)) = self
+            .areas
+            .iter()
+            .enumerate()
+            .skip_while(|(_, area)| area.get_start::<T>() >= VirtAddr::from(MMAP_END).into())
+            .find(|(_, area)| area.get_start::<T>() >= start_va.into())
+        {
+            self.areas.insert(idx, new_area);
+        } else {
+            error!("[MemorySet::mmap] No area found higher than new_area {:?} in beginning address. TRAMPOLINES may have been mapped to wrong places!",new_area);
+            self.areas.push(new_area);
+        }
+
         start_va.0 as isize
     }
     pub fn munmap(&mut self, start: usize, len: usize) -> Result<(), isize> {

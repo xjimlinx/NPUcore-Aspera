@@ -1,7 +1,4 @@
-use alloc::{
-    string::String,
-    vec,
-};
+use alloc::{string::String, vec};
 
 use super::ext4fs::Ext4FileSystem;
 
@@ -11,6 +8,7 @@ impl Ext4FileSystem {
     pub fn test_get_file(&self, path: &str) {
         let read_size = 2048;
         let child_inode = self.generic_open(path, &mut 2, false, 0, &mut 0).unwrap();
+        println!("child_inode_num: {:?}", child_inode);
         let mut data = vec![0u8; read_size as usize];
         // 读取文件内容
         let bytes_read = self.read_at(child_inode, 0 as usize, &mut data);

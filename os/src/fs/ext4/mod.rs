@@ -49,7 +49,7 @@ pub const EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE: u16 = 32;
 pub const EXT4_MAX_BLOCK_GROUP_DESCRIPTOR_SIZE: u16 = 64;
 
 /// 块大小
-pub const BLOCK_SIZE: usize = 2048;
+pub const BLOCK_SIZE: usize = crate::hal::BLOCK_SZ;
 
 /// 超级块偏移量（当块大小为2048时，实际上大于1024的话都是这个值）
 pub const EXT4_SUPERBLOCK_OFFSET_ON_WHEN_BLOCK_SIZE_2048: usize = 1024;

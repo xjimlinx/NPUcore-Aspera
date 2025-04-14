@@ -4,7 +4,7 @@ use core::ptr::addr_of;
 
 use crate::fs::filesystem::FS_Type;
 use crate::fs::inode::FatInode;
-use crate::hal::arch;
+use crate::hal;
 
 use super::{layout::BPB, Cache};
 use super::{BlockCacheManager, BlockDevice, DiskInodeType, Fat, Inode};
@@ -81,7 +81,7 @@ impl EasyFileSystem {
                 // 获取超级块（BPB）的每扇区字节数
                 let byts_per_sec = super_block.byts_per_sec;
                 // 如果每扇区字节数与预想的（la64模块内的设置为2048）不同，则触发panic
-                debug_assert!(byts_per_sec as usize == arch::BLOCK_SZ);
+                debug_assert!(byts_per_sec as usize == hal::BLOCK_SZ);
                 // 如果缓存单位不能被每扇区字节数整除，触发panic
                 debug_assert!(BlockCacheManager::CACHE_SZ % byts_per_sec as usize == 0);
                 // 如果超级块（BPB）非法，则报错

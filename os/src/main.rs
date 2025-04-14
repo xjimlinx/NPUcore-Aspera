@@ -18,7 +18,7 @@
 #![allow(dead_code)]
 #![allow(unused_assignments)]
 #![allow(unused_variables)]
-pub use hal::arch::config;
+pub use hal::config;
 extern crate alloc;
 
 #[macro_use]
@@ -40,9 +40,8 @@ mod utils;
 
 #[cfg(feature = "block_mem")]
 use crate::config::DISK_IMAGE_BASE;
-#[cfg(feature = "loongarch64")]
-use crate::hal::arch::bootstrap_init;
-use crate::hal::arch::machine_init;
+use crate::hal::bootstrap_init;
+use crate::hal::machine_init;
 #[cfg(feature = "loongarch64")]
 core::arch::global_asm!(include_str!("hal/arch/loongarch64/entry.asm"));
 #[cfg(feature = "riscv")]
@@ -51,8 +50,10 @@ core::arch::global_asm!(include_str!("hal/arch/riscv/entry.asm"));
 core::arch::global_asm!(include_str!("load_img.S"));
 #[cfg(all(feature = "block_mem", feature = "riscv"))]
 core::arch::global_asm!(include_str!("load_img-rv.S"));
-#[cfg(not(feature = "block_mem"))]
+#[cfg(all(not(feature = "block_mem"), feature = "loongarch64"))]
 core::arch::global_asm!(include_str!("preload_app.S"));
+#[cfg(all(not(feature = "block_mem"), feature = "riscv"))]
+core::arch::global_asm!(include_str!("preload_app-rv.S"));
 
 fn mem_clear() {
     extern "C" {
@@ -101,16 +102,15 @@ fn move_to_high_address() {
 
 #[no_mangle]
 pub fn rust_main() -> ! {
-    #[cfg(feature = "loongarch64")]
     bootstrap_init();
     mem_clear();
     // 这一行可能有误，需要后续处理
-    // #[cfg(all(feature = "block_mem", feature = "loongarch64"))]
+    #[cfg(all(feature = "block_mem"))]
     move_to_high_address();
     console::log_init();
     println!("[kernel] Console initialized.");
-    println!("[kernel] Hello, world!");
     mm::init();
+    println!("[kernel] Hello, world!");
     // note that remap_test is currently NOT supported by LA64, for the whole kernel space is RW!
     // #[cfg(feature = "riscv")]
     // mm::remap_test();
@@ -128,7 +128,6 @@ pub fn rust_main() -> ! {
     // note that in run_tasks(), there is yet *another* pre_start_init(),
     // which is used to turn on interrupts in some archs like LoongArch.
     task::run_tasks();
-    println!("sjdskjl");
     panic!("Unreachable in rust_main!");
 }
 

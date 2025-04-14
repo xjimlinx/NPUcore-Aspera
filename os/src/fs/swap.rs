@@ -1,7 +1,7 @@
 use alloc::{sync::Arc, vec::Vec};
 use spin::Mutex;
 
-use crate::{config::PAGE_SIZE, drivers::BLOCK_DEVICE, hal::arch::BLOCK_SZ};
+use crate::{config::PAGE_SIZE, drivers::BLOCK_DEVICE, hal::BLOCK_SZ};
 
 use super::directory_tree::FILE_SYSTEM;
 use lazy_static::*;

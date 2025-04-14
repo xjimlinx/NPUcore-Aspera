@@ -7,7 +7,7 @@ pub mod signal;
 mod task;
 pub mod threads;
 
-use crate::hal::arch::__switch;
+use crate::hal::__switch;
 use crate::{
     fs::{OpenFlags, ROOT_FD},
     mm::translated_refmut,

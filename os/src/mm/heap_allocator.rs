@@ -1,4 +1,4 @@
-use crate::hal::arch::KERNEL_HEAP_SIZE;
+use crate::hal::KERNEL_HEAP_SIZE;
 use buddy_system_allocator::LockedHeap;
 
 #[global_allocator]

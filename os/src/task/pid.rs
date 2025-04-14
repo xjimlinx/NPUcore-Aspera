@@ -1,4 +1,4 @@
-pub use crate::hal::arch::{trap_cx_bottom_from_tid, ustack_bottom_from_tid};
+pub use crate::hal::{trap_cx_bottom_from_tid, ustack_bottom_from_tid};
 use alloc::vec::Vec;
 use lazy_static::*;
 use spin::Mutex;

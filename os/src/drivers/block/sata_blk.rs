@@ -1,6 +1,6 @@
 use crate::config::PAGE_SIZE;
 use crate::drivers::block::BlockDevice;
-use crate::hal::arch::BLOCK_SZ;
+use crate::hal::BLOCK_SZ;
 use crate::mm::{frame_alloc, frame_dealloc, PhysAddr};
 use isomorphic_drivers::{
     block::ahci::{AHCI, BLOCK_SIZE},

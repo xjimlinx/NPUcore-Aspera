@@ -1,4 +1,4 @@
-use crate::{hal::arch::BLOCK_SZ, timer::TimeSpec};
+use crate::{hal::BLOCK_SZ, timer::TimeSpec};
 
 bitflags! {
     pub struct OpenFlags: u32 {

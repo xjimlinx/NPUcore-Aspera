@@ -1,16 +1,10 @@
-#[cfg(feature = "loongarch64")]
 use crate::config::MEMORY_HIGH_BASE;
 use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
-use crate::hal::arch::BLOCK_SZ;
-#[cfg(feature = "loongarch64")]
-use crate::hal::arch::BUFFER_CACHE_NUM;
+use crate::hal::{BLOCK_SZ, BUFFER_CACHE_NUM};
 use crate::mm::{frame_alloc, FrameTracker, KERNEL_SPACE};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use spin::Mutex;
-
-#[cfg(feature = "riscv")]
-use crate::hal::arch::riscv::rv_pagetable::RVPageTableEntry;
 
 use super::BlockDevice;
 
@@ -39,9 +33,6 @@ const PRIORITY_UPPERBOUND: usize = 1;
 const BUFFER_SIZE: usize = BLOCK_SZ;
 /// 页缓存数量（每页包含块数量）
 const PAGE_BUFFERS: usize = PAGE_SIZE / BUFFER_SIZE;
-
-#[cfg(not(feature = "loongarch64"))]
-const BUFFER_CACHE_NUM: usize = 16;
 
 /// 缓存池大小
 const CACHEPOOLSIZE: usize = BUFFER_CACHE_NUM >> (BLOCK_SZ / 512).trailing_zeros();
@@ -238,7 +229,6 @@ impl Cache for PageCache {
         })
     }
 
-    #[cfg(feature = "loongarch64")]
     fn sync(&self, block_ids: Vec<usize>, block_device: &Arc<dyn BlockDevice>) {
         let lock = KERNEL_SPACE.try_lock();
         match lock {
@@ -251,29 +241,9 @@ impl Cache for PageCache {
         }
         self.write_back(block_ids, block_device)
     }
-    #[cfg(feature = "riscv")]
-    fn sync(&self, block_ids: Vec<usize>, block_device: &Arc<dyn BlockDevice>) {
-        match self.get_pte() {
-            Some(pte) => {
-                if !pte.is_dirty() {
-                    return;
-                }
-            }
-            None => {}
-        }
-        self.write_back(block_ids, block_device)
-    }
 }
 
 impl PageCache {
-    #[cfg(feature = "riscv")]
-    fn get_pte(&self) -> Option<RVPageTableEntry> {
-        let lock = KERNEL_SPACE.try_lock();
-        match lock {
-            Some(lock) => Some(lock.translate(self.tracker.ppn.0.into())).unwrap(),
-            None => None,
-        }
-    }
     pub fn new() -> Self {
         let tracker = unsafe { crate::mm::frame_alloc_uninit().unwrap() };
         let page_ptr = (tracker.ppn.0 << PAGE_SIZE_BITS) as *mut [u8; PAGE_SIZE];
@@ -357,11 +327,11 @@ impl PageCache {
             .lock()
             .clear_dirty_bit((self.tracker.ppn.0 | MEMORY_HIGH_BASE).into())
             .unwrap();
-        #[cfg(feature = "riscv")]
-        KERNEL_SPACE
-        .lock()
-        .clear_dirty_bit(self.tracker.ppn.0.into())
-        .unwrap();
+        // #[cfg(feature = "riscv")]
+        // KERNEL_SPACE
+        //     .lock()
+        //     .clear_dirty_bit(self.tracker.ppn.0.into())
+        //     .unwrap();
     }
 
     /// 写回

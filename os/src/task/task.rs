@@ -7,13 +7,11 @@ use super::{pid_alloc, PidHandle};
 use crate::config::MMAP_BASE;
 use crate::fs::file_descriptor::FdTable;
 use crate::fs::{FileDescriptor, OpenFlags, ROOT_FD};
-use crate::hal::arch::trap_cx_bottom_from_tid;
-use crate::hal::arch::ustack_bottom_from_tid;
-#[cfg(feature = "loongarch64")]
-use crate::hal::arch::TrapImpl;
-use crate::hal::arch::{kstack_alloc, KernelStack};
-use crate::hal::arch::{trap_handler, TrapContext};
-#[cfg(feature = "loongarch64")]
+use crate::hal::trap_cx_bottom_from_tid;
+use crate::hal::ustack_bottom_from_tid;
+use crate::hal::TrapImpl;
+use crate::hal::{kstack_alloc, KernelStack};
+use crate::hal::{trap_handler, TrapContext};
 use crate::mm::PageTableImpl;
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::net::SocketTable;
@@ -26,8 +24,6 @@ use alloc::vec::Vec;
 use core::fmt::{self, Debug, Formatter};
 use log::trace;
 use spin::{Mutex, MutexGuard};
-#[cfg(feature = "riscv")]
-use riscv::register::scause::{Trap, Interrupt};
 
 #[derive(Clone)]
 /// 任务的文件系统状态
@@ -66,10 +62,7 @@ pub struct TaskControlBlock {
     /// 文件系统状态
     pub fs: Arc<Mutex<FsStatus>>,
     /// 虚拟内存空间
-    #[cfg(feature = "loongarch64")]
     pub vm: Arc<Mutex<MemorySet<PageTableImpl>>>,
-    #[cfg(feature = "riscv")]
-    pub vm: Arc<Mutex<MemorySet>>,
     /// 信号处理函数表
     pub sighand: Arc<Mutex<Vec<Option<Box<SigAction>>>>>,
     /// 快速用户空间互斥锁
@@ -256,22 +249,10 @@ impl TaskControlBlockInner {
         self.update_itimer_prof_if_exists(diff);
     }
     /// 在离开陷阱时更新进程时间
-    #[cfg(feature = "loongarch64")]
     pub fn update_process_times_leave_trap(&mut self, trap_cause: TrapImpl) {
         let now = TimeVal::now();
         self.update_itimer_real_if_exists(now - self.clock.last_enter_u_mode);
         if trap_cause.is_timer() {
-            let diff = now - self.clock.last_enter_s_mode;
-            self.rusage.ru_stime = self.rusage.ru_stime + diff;
-            self.update_itimer_prof_if_exists(diff);
-        }
-        self.clock.last_enter_u_mode = now;
-    }
-    #[cfg(feature = "riscv")]
-    pub fn update_process_times_leave_trap(&mut self, scause: Trap) {
-        let now = TimeVal::now();
-        self.update_itimer_real_if_exists(now - self.clock.last_enter_u_mode);
-        if scause != Trap::Interrupt(Interrupt::SupervisorTimer) {
             let diff = now - self.clock.last_enter_s_mode;
             self.rusage.ru_stime = self.rusage.ru_stime + diff;
             self.update_itimer_prof_if_exists(diff);
@@ -366,15 +347,9 @@ impl TaskControlBlock {
         // 为当前线程分配用户资源
         memory_set.alloc_user_res(tid, true);
         // 获取陷阱上下文的物理页号
-        #[cfg(feature = "loongarch64")]
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(trap_cx_bottom_from_tid(tid)).into())
             .unwrap();
-        #[cfg(feature = "riscv")]
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(trap_cx_bottom_from_tid(tid)).into())
-            .unwrap()
-            .ppn();
         log::trace!("[TCB::new]trap_cx_ppn{:?}", trap_cx_ppn);
         // 创建任务控制块
         let task_control_block = Self {
@@ -482,19 +457,9 @@ impl TaskControlBlock {
         // **** 保持当前PCB锁
         let mut inner = self.acquire_inner_lock();
         // 更新陷阱上下文的物理页号
-        #[cfg(feature = "loongarch64")]
-        {
-            inner.trap_cx_ppn = (&memory_set)
-                .translate(VirtAddr::from(self.trap_cx_user_va()).into())
-                .unwrap();
-        }
-        #[cfg(feature = "riscv")]
-        {
-            inner.trap_cx_ppn = (&memory_set)
-                .translate(VirtAddr::from(self.trap_cx_user_va()).into())
-                .unwrap()
-                .ppn();
-        }
+        inner.trap_cx_ppn = (&memory_set)
+            .translate(VirtAddr::from(self.trap_cx_user_va()).into())
+            .unwrap();
         // 更新任务上下文
         *inner.get_trap_cx() = trap_cx;
         // 重置clear_child_tid
@@ -584,17 +549,10 @@ impl TaskControlBlock {
             memory_set.lock().alloc_user_res(tid, stack.is_null());
         }
         // 获取陷阱上下文的物理页号
-        #[cfg(feature = "loongarch64")]
         let trap_cx_ppn = memory_set
             .lock()
             .translate(VirtAddr::from(trap_cx_bottom_from_tid(tid)).into())
             .unwrap();
-        #[cfg(feature = "riscv")]
-        let trap_cx_ppn = memory_set
-            .lock()
-            .translate(VirtAddr::from(trap_cx_bottom_from_tid(tid)).into())
-            .unwrap()
-            .ppn();
 
         // 创建任务控制块
         let task_control_block = Arc::new(TaskControlBlock {
