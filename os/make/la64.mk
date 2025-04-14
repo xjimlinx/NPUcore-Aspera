@@ -11,10 +11,6 @@ TARGET := loongarch64-unknown-linux-gnu
 MODE := debug
 FS_MODE ?= ext4
 
-# for riscv
-RUSTSBI_ELF := ../rustsbi/target/riscv64gc-unknown-none-elf/release/rustsbi-k210
-RUSTSBI_BIN := $(RUSTSBI_ELF).bin
-
 KERNEL_ELF = target/$(TARGET)/$(MODE)/os
 KERNEL_BIN = $(KERNEL_ELF).bin
 KERNEL_UIMG = $(KERNEL_ELF).ui
