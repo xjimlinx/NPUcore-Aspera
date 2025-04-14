@@ -477,7 +477,6 @@ impl MapArea {
         }
     }
 
-    // #[cfg(feature = "loongarch64")]
     pub fn map_one<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -492,7 +491,6 @@ impl MapArea {
         }
     }
 
-    #[cfg(feature = "loongarch64")]
     pub fn map_one_unchecked<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -511,27 +509,6 @@ impl MapArea {
                 page_table.map(vpn, ppn, self.map_perm);
             }
         }
-        ppn
-    }
-
-    #[cfg(feature = "riscv")]
-    pub fn map_one_unchecked<T: PageTable>(
-        &mut self,
-        page_table: &mut T,
-        vpn: VirtPageNum,
-    ) -> PhysPageNum {
-        let ppn: PhysPageNum;
-        match self.map_type {
-            MapType::Identical => {
-                ppn = PhysPageNum(vpn.0);
-            }
-            MapType::Framed => {
-                let frame = unsafe { frame_alloc_uninit().unwrap() };
-                ppn = frame.ppn;
-                self.inner.alloc_in_memory(vpn, frame);
-            }
-        }
-        page_table.map(vpn, ppn, self.map_perm);
         ppn
     }
 
