@@ -1,20 +1,38 @@
 pub mod context;
 use core::arch::{asm, global_asm};
 
+use super::TrapImpl;
 use crate::config::TRAMPOLINE;
+use crate::fs::directory_tree::ROOT;
+use crate::fs::OpenFlags;
+use crate::hal::arch::riscv::time::set_next_trigger;
 use crate::mm::{frame_reserve, MemoryError, VirtAddr};
 use crate::syscall::syscall;
 use crate::task::{
     current_task, current_trap_cx, do_signal, do_wake_expired, suspend_current_and_run_next,
     Signals,
 };
-use crate::timer::set_next_trigger;
+use alloc::format;
 pub use context::UserContext;
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
     sepc, sie, stval, stvec,
 };
+
+pub static mut TIMER_INTERRUPT: usize = 0;
+
+pub fn get_bad_addr() -> usize {
+    stval::read()
+}
+
+pub fn get_bad_instruction() -> usize {
+    stval::read()
+}
+
+pub fn get_exception_cause() -> TrapImpl {
+    scause::read().cause()
+}
 
 global_asm!(include_str!("trap.S"));
 
@@ -94,7 +112,7 @@ pub fn trap_handler() -> ! {
                     MemoryError::NoPermission | MemoryError::BadAddress => {
                         inner.add_signal(Signals::SIGSEGV);
                     }
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             };
         }
@@ -105,6 +123,15 @@ pub fn trap_handler() -> ! {
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             do_wake_expired();
+            unsafe {
+                TIMER_INTERRUPT += 1;
+                //if TIMER_INTERRUPT % 100_000 == 0 {
+                let f = ROOT
+                    .open("/proc/interrupts", OpenFlags::O_CREAT, false)
+                    .unwrap();
+                f.write(None, format!("5: {}", TIMER_INTERRUPT).as_bytes());
+                //}
+            }
             set_next_trigger();
             suspend_current_and_run_next();
         }
