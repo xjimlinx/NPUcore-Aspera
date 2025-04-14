@@ -50,8 +50,22 @@ pub const MEMORY_HIGH_BASE: usize = 0x0000_0000_0000_000;
 pub use crate::hal::arch::riscv::rv_board::{CLOCK_FREQ, MMIO};
 
 #[macro_export]
+macro_rules! signal_type {
+    () => {
+        usize
+    };
+}
+
+#[macro_export]
 macro_rules! newline {
     () => {
         "\r\n"
+    };
+}
+
+#[macro_export]
+macro_rules! should_map_trampoline {
+    () => {
+        true
     };
 }
