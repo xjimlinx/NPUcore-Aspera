@@ -143,9 +143,7 @@ set_clear_csr!(
 
 /// Supervisor Previous Privilege Mode
 #[inline]
-// xein change this for convinience.
-// should be changed in the future.
-// #[cfg(riscv)]
+#[cfg(riscv)]
 pub unsafe fn set_spp(spp: SPP) {
     match spp {
         SPP::Supervisor => _set(1 << 8),

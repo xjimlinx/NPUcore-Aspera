@@ -15,7 +15,27 @@ pub enum Trap {
     Interrupt(Interrupt),
     Exception(Exception),
 }
+impl Trap {
+    /// Is trap cause a timer.
+    #[inline]
+    pub fn is_timer(&self) -> bool {
+        if let Trap::Interrupt(Interrupt::SupervisorTimer) = self {
+            true
+        } else {
+            false
+        }
+    }
 
+    /// Is trap cause a syscall.
+    #[inline]
+    pub fn is_syscall(&self) -> bool {
+        if let Trap::Exception(Exception::UserEnvCall) = self {
+            true
+        } else {
+            false
+        }
+    }
+}
 /// Interrupt
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Interrupt {
