@@ -1,11 +1,10 @@
+use super::map_area::*;
 use super::page_table::PageTable;
-use super::{map_area::*, KernelPageTableImpl, PageTableImpl};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use crate::config::*;
 use crate::fs::SeekWhence;
 use crate::hal::TrapContext;
 use crate::hal::{MMIO, TICKS_PER_SEC};
-#[cfg(feature = "loongarch64")]
 use crate::should_map_trampoline;
 use crate::syscall::errno::*;
 use crate::task::{
@@ -484,18 +483,12 @@ impl<T: PageTable> MemorySet<T> {
     /// 创建一个空的内核空间
     /// Without kernel stacks. (Is it done with .bss?)
     pub fn new_kernel() -> Self {
-        #[cfg(feature = "loongarch64")]
         let mut memory_set = Self::new_bare_kern();
-        #[cfg(feature = "riscv")]
-        let mut memory_set = Self::new_bare();
         // map trampoline
         // TODO: 这里两者不一样，是为什么？
-        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
-        #[cfg(feature = "riscv")]
-        memory_set.map_trampoline();
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
@@ -685,12 +678,9 @@ impl<T: PageTable> MemorySet<T> {
     pub fn from_elf(elf_data: &[u8]) -> Result<(Self, usize, ELFInfo), isize> {
         let mut memory_set = Self::new_bare();
         // map trampoline
-        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
-        #[cfg(feature = "riscv")]
-        memory_set.map_trampoline();
         // map signaltrampoline
         memory_set.map_signaltrampoline();
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
@@ -701,12 +691,9 @@ impl<T: PageTable> MemorySet<T> {
     pub fn from_existing_user(user_space: &mut MemorySet<T>) -> MemorySet<T> {
         let mut memory_set = Self::new_bare();
         // map trampoline
-        #[cfg(feature = "loongarch64")]
         if should_map_trampoline!() {
             memory_set.map_trampoline();
         }
-        #[cfg(feature = "riscv")]
-        memory_set.map_trampoline();
         // map signaltrampoline
         memory_set.map_signaltrampoline();
         // map data sections/user heap/mmap area/user stack
