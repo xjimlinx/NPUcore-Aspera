@@ -4,6 +4,7 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
+BLK_MODE := mem
 FS_MODE ?= ext4
 ROOTFS_IMG_NAME = rootfs-rv.img
 ROOTFS_IMG_DIR := ../fs-img-dir
@@ -72,9 +73,9 @@ kernel:
 	@echo Platform: $(BOARD)
 	@cp src/hal/arch/riscv/linker-$(BOARD).ld src/hal/arch/riscv/linker.ld
     ifeq ($(MODE), debug)
-		@cargo build --features "board_$(BOARD) $(LOG_OPTION) block_mem oom_handler" --no-default-features
+		@cargo build --features "board_$(BOARD) $(LOG_OPTION) block_$(BLK_MODE) oom_handler" --no-default-features
     else
-		@cargo build --release --features "board_$(BOARD) $(LOG_OPTION) block_mem oom_handler" --no-default-features
+		@cargo build --release --features "board_$(BOARD) $(LOG_OPTION) block_$(BLK_MODE) oom_handler" --no-default-features
     endif
 	@rm src/hal/arch/riscv/linker.ld
 
@@ -88,7 +89,8 @@ ifeq ($(BOARD), rvqemu)
   		-nographic \
   		-bios $(BOOTLOADER) \
   		-device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
-  		-drive if=none,file=$(ROOTFS_IMG),format=raw \
+  		-drive if=none,file=$(ROOTFS_IMG),format=raw,id=x0 \
+        -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0\
   		-m 1024 \
   		-smp threads=$(CORE_NUM)
 endif
@@ -100,7 +102,9 @@ gdb:
 	@qemu-system-riscv64 -machine virt -nographic -bios $(BOOTLOADER) -device loader,\
 	file=target/riscv64gc-unknown-none-elf/debug/os,addr=0x80200000 -drive \
 	file=$(ROOTFS_IMG),if=none,format=raw,id=x0 \
-	-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -smp threads=$(CORE_NUM) -S -s # file=target/riscv64gc-unknown-none-elf/$(MODE)/os,addr=0x80200000 -drive
+	-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+	-m 1024 \
+	-smp threads=$(CORE_NUM) -S -s | tee qemu.log
 
 runsimple:
 	@qemu-system-riscv64 \
