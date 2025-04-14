@@ -16,8 +16,6 @@ mod test;
 #[allow(unused)]
 pub use super::cache::{BlockCacheManager, BufferCache, Cache, PageCache, PageCacheManager};
 pub use crate::drivers::block::BlockDevice;
-#[allow(unused)]
-pub use crate::fs::fat32::fat_inode::Inode;
 pub use ext4_inode::*;
 
 /// Inode相关的常量

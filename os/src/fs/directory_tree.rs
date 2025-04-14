@@ -9,13 +9,11 @@ use super::{
     Hwclock,
 };
 use crate::fs::dev::urandom::Urandom;
+use crate::fs::fat32::FatOSInode;
 #[cfg(feature = "oom_handler")]
 use crate::mm::tlb_invalidate;
 use crate::syscall::errno::*;
-use crate::{
-    drivers::BLOCK_DEVICE,
-    fs::{filesystem::FS_Type, inode::OSInode},
-};
+use crate::{drivers::BLOCK_DEVICE, fs::filesystem::FS_Type};
 use alloc::{
     collections::BTreeMap,
     string::{String, ToString},
@@ -614,8 +612,8 @@ impl DirectoryTreeNode {
         };
         match old_inode.filesystem.fs_type {
             FS_Type::Fat32 => {
-                let old_file = old_inode.file.downcast_ref::<OSInode>().unwrap();
-                let new_par_file = new_par_inode.file.downcast_ref::<OSInode>().unwrap();
+                let old_file = old_inode.file.downcast_ref::<FatOSInode>().unwrap();
+                let new_par_file = new_par_inode.file.downcast_ref::<FatOSInode>().unwrap();
                 new_par_file.link_child(old_last_comp, old_file)?;
             }
             FS_Type::Ext4 => {

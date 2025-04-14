@@ -1,5 +1,7 @@
-use super::layout::{FATDirEnt, FATShortDirEnt};
-use crate::fs::fat32::Inode;
+use super::{
+    layout::{FATDirEnt, FATShortDirEnt},
+    FatInode,
+};
 use crate::fs::inode::InodeLock;
 use crate::fs::inode::InodeTrait;
 use alloc::string::String;
@@ -38,7 +40,7 @@ pub struct DirIter<'a, 'b> {
     mode: DirIterMode,
     direction: bool,
     /// The pointer of inode
-    inode: &'a Inode,
+    inode: &'a FatInode,
 }
 
 impl<'a, 'b> DirIter<'a, 'b> {
@@ -56,7 +58,7 @@ impl<'a, 'b> DirIter<'a, 'b> {
         offset: Option<u32>,
         mode: DirIterMode,
         direction: bool,
-        inode: &'a Inode,
+        inode: &'a FatInode,
     ) -> Self {
         Self {
             inode_lock,
