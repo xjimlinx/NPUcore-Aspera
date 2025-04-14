@@ -3,7 +3,6 @@ os/Cargo.lock
 user/Cargo.lock
 
 # vscode config
-.vscode/
 .VSCodeCounter/
 
 # RustRover config
