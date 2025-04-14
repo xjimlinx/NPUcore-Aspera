@@ -1,14 +1,23 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-       {
-             "type": "cppdbg",
-             "request": "launch",
-             "name": "debug: riscv",
-             "program": "${workspaceFolder}/os/target/riscv64gc-unknown-none-elf/debug/os",
-             "miDebuggerServerAddress": "localhost:1234",
-             "miDebuggerPath": "riscv64-unknown-elf-gdb",
-             "cwd": "${workspaceRoot}"
-       }
-    ]
- }
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "cppdbg",
+      "request": "launch",
+      "name": "Debug: Riscv",
+      "program": "${workspaceFolder}/os/target/riscv64gc-unknown-none-elf/debug/os",
+      "miDebuggerServerAddress": "localhost:1234",
+      "miDebuggerPath": "riscv64-unknown-elf-gdb",
+      "cwd": "${workspaceRoot}"
+    },
+    {
+      "type": "cppdbg",
+      "request": "launch",
+      "name": "Debug: LoongArch",
+      "program": "${workspaceFolder}/os/target/loongarch64-unknown-linux-gnu/debug/os",
+      "miDebuggerServerAddress": "localhost:1234",
+      "miDebuggerPath": "loongarch64-unknown-linux-gnu-gdb",
+      "cwd": "${workspaceRoot}"
+    }
+  ]
+}
