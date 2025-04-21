@@ -32,3 +32,6 @@ os/qemu.log
 rootfs-ext4.log
 /os/read_test
 kernel.bin
+
+# Temporary Remove Large Files for File Size Limit
+/util
