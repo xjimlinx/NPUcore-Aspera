@@ -137,7 +137,19 @@ endif
 
 env: # 切换工具链
 	-(rustup target list | grep "$(TARGET) (installed)") || rustup target add $(TARGET)
-	if ! pacman -Q expect > /dev/null 2>&1; then sudo pacman -S --noconfirm expect; fi
+	@if command -v pacman >/dev/null 2>&1; then \
+		if ! pacman -Q expect >/dev/null 2>&1; then \
+			sudo pacman -S --noconfirm expect; \
+		fi \
+	elif command -v apt >/dev/null 2>&1; then \
+		if ! dpkg -s expect >/dev/null 2>&1; then \
+			sudo apt update && sudo apt install -y expect; \
+		fi \
+	else \
+		echo "Error: System has neither pacman nor apt package manager."; \
+		echo "Please install expect manually and ensure it's in PATH"; \
+		exit 1; \
+	fi
 
 clean:
 	@cargo clean
