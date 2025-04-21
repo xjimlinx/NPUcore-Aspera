@@ -1,5 +1,6 @@
 use core::panic;
 
+use super::BLOCK_SIZE;
 use super::{
     crc::{ext4_crc32c, EXT4_CRC32_INIT},
     superblock::Ext4Superblock,
@@ -7,8 +8,6 @@ use super::{
 };
 use crate::math::is_power_of;
 use alloc::{sync::Arc, vec::Vec};
-// use crate::arch::BLOCK_SZ;
-use super::BLOCK_SIZE;
 
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(C, packed)]
@@ -225,7 +224,7 @@ impl Ext4BlockGroup {
         let mut origin_block_data = [0u8; BLOCK_SIZE];
         block_device.read_block(block_id, &mut origin_block_data);
         // 然后按偏移量将数据覆写到读取的块数据
-        for i in offset..offset+data.len() {
+        for i in offset..offset + data.len() {
             origin_block_data[i] = data[i - offset];
         }
         // origin_block_data[offset..offset + data.len()].copy_from_slice(data);

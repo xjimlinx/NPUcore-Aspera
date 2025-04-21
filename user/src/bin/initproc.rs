@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
-use user_lib::{exit, exec, fork, waitpid, shutdown, sleep};
-
+// use user_lib::{exit, exec, fork, waitpid, shutdown, sleep};
+use user_lib::{exec, exit, fork, shutdown, waitpid};
 #[no_mangle]
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
@@ -34,7 +34,11 @@ fn main() -> i32 {
     let pid = fork();
     if pid == 0 {
         // 只启动bash
-        exec(path, &[path.as_ptr() as *const u8, core::ptr::null()], &environ);
+        exec(
+            path,
+            &[path.as_ptr() as *const u8, core::ptr::null()],
+            &environ,
+        );
         // 执行初赛测例
         // exec(path, &[path.as_ptr() as *const u8, "-c\0".as_ptr(), "./run-all.sh\0".as_ptr(), core::ptr::null()], &environ);
         // 执行决赛测例

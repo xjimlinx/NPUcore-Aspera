@@ -1,6 +1,6 @@
 use crate::fs::poll::{ppoll, pselect, FdSet, PollFd};
 use crate::fs::*;
-use crate::hal::arch::BLOCK_SZ;
+use crate::hal::BLOCK_SZ;
 use crate::mm::{
     copy_from_user, copy_from_user_array, copy_to_user, copy_to_user_array, copy_to_user_string,
     translated_byte_buffer, translated_byte_buffer_append_to_existing_vec, translated_refmut,

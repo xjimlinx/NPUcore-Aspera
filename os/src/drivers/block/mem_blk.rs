@@ -1,5 +1,5 @@
 use super::BlockDevice;
-use crate::{config::DISK_IMAGE_BASE, hal::arch::BLOCK_SZ};
+use crate::{config::DISK_IMAGE_BASE, hal::BLOCK_SZ};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use spin::Mutex;
 struct MemBlock(usize);
@@ -21,6 +21,7 @@ pub struct MemBlockWrapper(Mutex<MemBlock>);
 #[allow(unused)]
 impl MemBlockWrapper {
     const BASE_ADDR: usize = DISK_IMAGE_BASE;
+    /// 这个MemBlockWrapper在RiscV下可能有问题
     pub fn new() -> Self {
         Self(Mutex::new(MemBlock(MemBlockWrapper::BASE_ADDR)))
     }

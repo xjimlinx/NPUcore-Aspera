@@ -20,7 +20,7 @@
 
 ## 一、context
 
-### 1.1 TaskContext 
+### 1.1 TaskContext
 
 内容最简单的一个文件，包含了一个结构体类型`TaskContext`以及其方法实现
 
@@ -49,7 +49,7 @@ impl TaskContext {
             s: [0; 12],
         }
     }
-    // 
+    //
     pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         Self {
             ra: trap_return as usize,
@@ -199,7 +199,7 @@ pub fn load_elf_interp(path: &str) -> Result<&'static [u8], isize> {
                         .map(|cache| Frame::InMemory(cache.try_lock().unwrap().get_tracker()))
                         .collect();
 
-                    // 
+                    //
                     crate::mm::KERNEL_SPACE
                         .lock()
                         .insert_program_area(
@@ -431,7 +431,7 @@ pub fn add_task(task: Arc<TaskControlBlock>) {
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
     TASK_MANAGER.lock().fetch()
 }
- 
+
 /// 这个函数会将`task`加入到`interruptible_queue`，
 /// 但不会从`ready_queue`中删除。
 /// 所以需要确保`task`不会出现在`ready_queue`中。

@@ -1,13 +1,16 @@
 mod block_dev;
 mod mem_blk;
 mod sata_blk;
+mod virtio_blk;
 pub use block_dev::BlockDevice;
 #[cfg(feature = "block_mem")]
 type BlockDeviceImpl = mem_blk::MemBlockWrapper;
 #[cfg(feature = "block_sata")]
 type BlockDeviceImpl = sata_blk::SataBlock;
+#[cfg(feature = "block_virt")]
+type BlockDeviceImpl = virtio_blk::VirtIOBlock;
 
-use crate::hal::arch::BLOCK_SZ;
+use crate::hal::BLOCK_SZ;
 use alloc::sync::Arc;
 use lazy_static::*;
 

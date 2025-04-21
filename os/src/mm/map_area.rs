@@ -60,10 +60,10 @@ impl Frame {
             _ => None,
         }
     }
-	pub fn gen_id(&mut self,frame_ref:&mut Arc<FrameTracker>) -> usize {
-		let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
+    pub fn gen_id(&mut self, frame_ref: &mut Arc<FrameTracker>) -> usize {
+        let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
         swap_tracker.0
-	}
+    }
     #[cfg(feature = "oom_handler")]
     pub fn swap_out(&mut self) -> Result<usize, MemoryError> {
         match self {
@@ -71,7 +71,6 @@ impl Frame {
                 if Arc::strong_count(frame_ref) == 1 {
                     let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
                     let swap_id = swap_tracker.0;
-					
                     // frame_tracker should be dropped
                     *self = Frame::SwappedOut(swap_tracker);
                     Ok(swap_id)
@@ -91,7 +90,7 @@ impl Frame {
             Frame::InMemory(frame_ref) => {
                 let swap_tracker = SWAP_DEVICE.lock().write(frame_ref.ppn.get_bytes_array());
                 //let swap_id = self.gen_id();
-				let swap_id = swap_tracker.0;
+                let swap_id = swap_tracker.0;
                 // frame_tracker should be dropped
                 *self = Frame::SwappedOut(swap_tracker);
                 Ok(swap_id)
@@ -184,8 +183,8 @@ impl Debug for LinearMap {
     }
 }
 impl LinearMap {
-	pub fn gen_dict(&self,vpn_range : VPNRange) -> LinearMap {
-		let new_dict = Self {
+    pub fn gen_dict(&self, vpn_range: VPNRange) -> LinearMap {
+        let new_dict = Self {
             vpn_range,
             frames: Vec::with_capacity(vpn_range.get_end().0 - vpn_range.get_start().0),
             #[cfg(feature = "oom_handler")]
@@ -195,14 +194,14 @@ impl LinearMap {
             #[cfg(feature = "oom_handler")]
             swapped: 0,
         };
-		new_dict
-	}
-	pub fn get_start(&self) -> VirtPageNum {
-		self.vpn_range.get_start()
-	}
-	pub fn get_end(&self) -> VirtPageNum {
-		self.vpn_range.get_end()
-	}
+        new_dict
+    }
+    pub fn get_start(&self) -> VirtPageNum {
+        self.vpn_range.get_start()
+    }
+    pub fn get_end(&self) -> VirtPageNum {
+        self.vpn_range.get_end()
+    }
     pub fn new(vpn_range: VPNRange) -> Self {
         let len = vpn_range.get_end().0 - vpn_range.get_start().0;
         let mut new_dict = Self {
@@ -477,7 +476,7 @@ impl MapArea {
             map_file: None,
         }
     }
-    
+
     pub fn map_one<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -491,6 +490,7 @@ impl MapArea {
             Err((MemoryError::AlreadyMapped, vpn))
         }
     }
+
     pub fn map_one_unchecked<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -511,6 +511,7 @@ impl MapArea {
         }
         ppn
     }
+
     pub fn map_one_zeroed_unchecked<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -544,7 +545,8 @@ impl MapArea {
         }
         Ok(())
     }
-    
+
+    // xein TODO:
     pub fn map_from_existing_page_table<T: PageTable>(
         &mut self,
         dst_page_table: &mut T,
@@ -562,9 +564,9 @@ impl MapArea {
         }
         Ok(())
     }
-	pub fn get_inner(&self) -> &LinearMap {
-		&self.inner
-	}
+    pub fn get_inner(&self) -> &LinearMap {
+        &self.inner
+    }
     pub fn get_start<T: PageTable>(&self) -> VirtPageNum {
         self.get_inner().vpn_range.get_start()
     }
@@ -573,8 +575,8 @@ impl MapArea {
     }
 
     pub fn get_lock(&self) -> &LinearMap {
-		&self.inner
-	}
+        &self.inner
+    }
     pub fn map_from_kernel_area<T: PageTable>(
         &mut self,
         page_table: &mut T,
@@ -626,11 +628,10 @@ impl MapArea {
     ) -> Result<PhysPageNum, MemoryError> {
         let old_frame = self.inner.remove_in_memory(&vpn).unwrap();
         if Arc::strong_count(&old_frame) == 1 {
-            
             let old_ppn = old_frame.ppn;
             self.inner.alloc_in_memory(vpn, old_frame);
             page_table.set_pte_flags(vpn, self.map_perm).unwrap();
-           
+
             trace!("[copy_on_write] no copy occurred");
             Ok(old_ppn)
         } else {

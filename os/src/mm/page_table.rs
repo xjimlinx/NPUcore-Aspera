@@ -1,6 +1,6 @@
 use core::ops::IndexMut;
 
-use super::memory_set::check_page_fault;
+pub use super::memory_set::check_page_fault;
 use super::{MapPermission, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -72,7 +72,6 @@ pub fn gen_start_end(start: VirtAddr, end: VirtAddr) -> (VirtPageNum, VirtPageNu
 }
 
 /// if `existing_vec == None`, a empty `Vec` will be created.
-#[cfg(feature = "loongarch64")]
 pub fn translated_byte_buffer_append_to_existing_vec(
     existing_vec: &mut Vec<&'static mut [u8]>,
     token: usize,
@@ -87,41 +86,6 @@ pub fn translated_byte_buffer_append_to_existing_vec(
         let mut vpn = start_va.floor();
         let ppn = match page_table.translate(vpn) {
             Some(pte) => pte,
-            None => {
-                let pa = check_page_fault(vpn.into())?;
-                pa.floor()
-            }
-        };
-        vpn.step();
-        let mut end_va: VirtAddr = vpn.into();
-        end_va = end_va.min(VirtAddr::from(end));
-        if end_va.page_offset() == 0 {
-            existing_vec.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
-        } else {
-            existing_vec
-                .push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
-        }
-        start = end_va.into();
-    }
-    Ok(())
-}
-
-#[cfg(feature = "riscv")]
-/// if `existing_vec == None`, a empty `Vec` will be created.
-pub fn translated_byte_buffer_append_to_existing_vec(
-    existing_vec: &mut Vec<&'static mut [u8]>,
-    token: usize,
-    ptr: *const u8,
-    len: usize,
-) -> Result<(), isize> {
-    let page_table = PageTable::from_token(token);
-    let mut start = ptr as usize;
-    let end = start + len;
-    while start < end {
-        let start_va = VirtAddr::from(start);
-        let mut vpn = start_va.floor();
-        let ppn = match page_table.translate(vpn) {
-            Some(pte) => pte.ppn(),
             None => {
                 let pa = check_page_fault(vpn.into())?;
                 pa.floor()
@@ -146,7 +110,6 @@ pub fn ptf_ok(ptf: usize) -> bool {
     ptf & 1 == 1
 }
 
-#[cfg(feature = "loongarch64")]
 pub fn translated_byte_buffer(
     token: usize,
     ptr: *const u8,
@@ -161,39 +124,6 @@ pub fn translated_byte_buffer(
         let mut vpn = start_va.floor();
         let ppn = match page_table.translate(vpn) {
             Some(pte) => pte,
-            None => {
-                let pa = check_page_fault(vpn.into())?;
-                pa.floor()
-            }
-        };
-        vpn.step();
-        let mut end_va: VirtAddr = vpn.into();
-        end_va = end_va.min(VirtAddr::from(end));
-        if end_va.page_offset() == 0 {
-            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
-        } else {
-            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
-        }
-        start = end_va.into();
-    }
-    Ok(v)
-}
-
-#[cfg(feature = "riscv")]
-pub fn translated_byte_buffer(
-    token: usize,
-    ptr: *const u8,
-    len: usize,
-) -> Result<Vec<&'static mut [u8]>, isize> {
-    let page_table = PageTable::from_token(token);
-    let mut start = ptr as usize;
-    let end = start + len;
-    let mut v = Vec::with_capacity(32);
-    while start < end {
-        let start_va = VirtAddr::from(start);
-        let mut vpn = start_va.floor();
-        let ppn = match page_table.translate(vpn) {
-            Some(pte) => pte.ppn(),
             None => {
                 let pa = check_page_fault(vpn.into())?;
                 pa.floor()
@@ -222,10 +152,7 @@ pub fn get_right_aligned_bytes<T>(ptr: *const T) -> usize {
 
 /// Load a string from other address spaces into kernel space without an end `\0`.
 pub fn translated_str(token: usize, ptr: *const u8) -> Result<String, isize> {
-    #[cfg(feature = "loongarch64")]
     let page_table = super::PageTableImpl::from_token(token);
-    #[cfg(feature = "riscv")]
-    let page_table = RVPageTable::from_token(token);
     let mut string = String::new();
     let mut cur = ptr as usize;
     loop {
@@ -248,10 +175,7 @@ pub fn translated_str(token: usize, ptr: *const u8) -> Result<String, isize> {
 
 /// Translate the user space pointer `ptr` into a reference in user space through page table `token`
 pub fn translated_ref<T>(token: usize, ptr: *const T) -> Result<&'static T, isize> {
-    #[cfg(feature = "loongarch64")]
     let page_table = super::PageTableImpl::from_token(token);
-    #[cfg(feature = "riscv")]
-    let page_table = RVPageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let pa = match page_table.translate_va(va) {
         Some(pa) => pa,
@@ -264,10 +188,7 @@ pub fn translated_ref<T>(token: usize, ptr: *const T) -> Result<&'static T, isiz
 /// # Implementation Information
 /// * Get the pagetable from token
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> Result<&'static mut T, isize> {
-    #[cfg(feature = "loongarch64")]
     let page_table = super::PageTableImpl::from_token(token);
-    #[cfg(feature = "riscv")]
-    let page_table = RVPageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let pa = match page_table.translate_va(va) {
         Some(pa) => pa,
@@ -512,10 +433,7 @@ pub fn copy_from_user_array<T: 'static + Copy>(
     let size = core::mem::size_of::<T>() * len;
     // if all data of `*src` is in the same page, read directly
     if VirtAddr::from(src as usize).floor() == VirtAddr::from(src as usize + size - 1).floor() {
-        #[cfg(feature = "loongarch64")]
         let page_table = super::PageTableImpl::from_token(token);
-        #[cfg(feature = "riscv")]
-        let page_table = RVPageTable::from_token(token);
         let src_va = VirtAddr::from(src as usize);
         let src_pa = match page_table.translate_va(src_va) {
             Some(pa) => pa,
@@ -589,10 +507,7 @@ pub fn copy_to_user_array<T: 'static + Copy>(
     let size = core::mem::size_of::<T>() * len;
     // if all data of `*dst` is in the same page, write directly
     if VirtAddr::from(dst as usize).floor() == VirtAddr::from(dst as usize + size - 1).floor() {
-        #[cfg(feature = "loongarch64")]
         let page_table = super::PageTableImpl::from_token(token);
-        #[cfg(feature = "riscv")]
-        let page_table = RVPageTable::from_token(token);
         let dst_va = VirtAddr::from(dst as usize);
         let dst_pa = match page_table.translate_va(dst_va) {
             Some(pa) => pa,
@@ -618,10 +533,7 @@ pub fn copy_to_user_array<T: 'static + Copy>(
 /// Caller should ensure `src` is not too large, or this function will write out of bound.
 pub fn copy_to_user_string(token: usize, src: &str, dst: *mut u8) -> Result<(), isize> {
     let size = src.len();
-    #[cfg(feature = "loongarch64")]
     let page_table = super::PageTableImpl::from_token(token);
-    #[cfg(feature = "riscv")]
-    let page_table = RVPageTable::from_token(token);
     let dst_va = VirtAddr::from(dst as usize);
     let dst_pa = match page_table.translate_va(dst_va) {
         Some(pa) => pa,

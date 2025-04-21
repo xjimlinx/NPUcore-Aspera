@@ -1,6 +1,6 @@
-use crate::config::{MEMORY_HIGH_BASE, PAGE_SIZE, PAGE_SIZE_BITS};
-use crate::hal::arch::BLOCK_SZ;
-use crate::hal::arch::BUFFER_CACHE_NUM;
+use crate::config::MEMORY_HIGH_BASE;
+use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::hal::{BLOCK_SZ, BUFFER_CACHE_NUM};
 use crate::mm::{frame_alloc, FrameTracker, KERNEL_SPACE};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -33,9 +33,6 @@ const PRIORITY_UPPERBOUND: usize = 1;
 const BUFFER_SIZE: usize = BLOCK_SZ;
 /// 页缓存数量（每页包含块数量）
 const PAGE_BUFFERS: usize = PAGE_SIZE / BUFFER_SIZE;
-
-#[cfg(not(feature = "loongarch64"))]
-const BUFFER_CACHE_NUM: usize = 16;
 
 /// 缓存池大小
 const CACHEPOOLSIZE: usize = BUFFER_CACHE_NUM >> (BLOCK_SZ / 512).trailing_zeros();
@@ -325,10 +322,16 @@ impl PageCache {
         };
         block_device.read_block(start_block_id, buf);
         self.page_ptr[block_ids.len() * BUFFER_SIZE..].fill(0);
+        #[cfg(feature = "loongarch64")]
         KERNEL_SPACE
             .lock()
             .clear_dirty_bit((self.tracker.ppn.0 | MEMORY_HIGH_BASE).into())
             .unwrap();
+        // #[cfg(feature = "riscv")]
+        // KERNEL_SPACE
+        //     .lock()
+        //     .clear_dirty_bit(self.tracker.ppn.0.into())
+        //     .unwrap();
     }
 
     /// 写回

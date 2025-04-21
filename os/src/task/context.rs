@@ -3,7 +3,7 @@
     TaskContext 结构体包含了任务的上下文信息，包括返回地址 ra、栈指针 sp 和通用寄存器 s
     内容与RISCV版本相同，无需修改
 */
-use crate::hal::arch::trap_return;
+use crate::hal::trap_return;
 
 #[repr(C)]
 /// 任务上下文

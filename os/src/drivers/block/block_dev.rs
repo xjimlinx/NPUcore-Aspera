@@ -1,6 +1,6 @@
 use core::any::Any;
 
-use crate::hal::arch::BLOCK_SZ;
+use crate::hal::BLOCK_SZ;
 /// We should regulate the behavior of this trait on FAILURE
 /// e.g. What if buf.len()>BLOCK_SZ for read_block?
 /// e.g. Does read_block clean the rest part of the block to be zero for buf.len()!=BLOCK_SZ in write_block() & read_block()

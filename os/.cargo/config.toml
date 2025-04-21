@@ -1,9 +1,18 @@
 [build]
-target = "loongarch64-unknown-linux-gnu"
+# target = "loongarch64-unknown-linux-gnu"
+target = "riscv64gc-unknown-none-elf"
 
 [target.loongarch64-unknown-linux-gnu]
-rustflags = ["-Clink-arg=-Tsrc/linker.ld", "-Clink-arg=-nostdlib", "-Clink-arg=-static"]
+rustflags = [
+    "-Clink-arg=-Tsrc/hal/arch/loongarch64/linker.ld",
+    "-Clink-arg=-nostdlib",
+    "-Clink-arg=-static",
+]
 # Add "-Ctarget-feature=-unaligned-access" when ready.
 linker = "loongarch64-linux-gnu-gcc"
 
-
+[target.riscv64gc-unknown-none-elf]
+rustflags = [
+    "-Clink-arg=-Tsrc/hal/arch/riscv/linker.ld",
+    "-Cforce-frame-pointers=yes",
+]

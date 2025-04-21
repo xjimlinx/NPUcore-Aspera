@@ -15,8 +15,6 @@ pub use sbi::{console_flush, console_getchar, console_putchar, shutdown};
 pub use switch::__switch;
 pub use tlb::{tlb_global_invalidate, tlb_invalidate};
 
-//use crate::mm::remap_test;
-
 use crate::{
     config::{DIR_WIDTH, MMAP_BASE, PAGE_SIZE_BITS, PTE_WIDTH, PTE_WIDTH_BITS, SUC_DMW_VESG},
     hal::arch::loongarch64::{

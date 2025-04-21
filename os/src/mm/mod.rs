@@ -6,8 +6,7 @@ mod memory_set;
 mod page_table;
 #[cfg(feature = "zram")]
 mod zram;
-pub use crate::hal::arch::KernelPageTableImpl;
-pub use crate::hal::arch::PageTableImpl;
+pub use crate::hal::{KernelPageTableImpl, PageTableImpl};
 pub use address::PPNRange;
 use address::VPNRange;
 pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
@@ -15,7 +14,9 @@ pub use frame_allocator::{
     frame_alloc, frame_alloc_uninit, frame_dealloc, frame_reserve, unallocated_frames, FrameTracker,
 };
 pub use map_area::{Frame, MapFlags, MapPermission};
-pub use memory_set::{MemoryError, MemorySet, KERNEL_SPACE};
+pub use memory_set::kernel_token;
+pub use memory_set::MemoryError;
+pub use memory_set::{MemorySet, KERNEL_SPACE};
 pub use page_table::{
     copy_from_user,
     copy_from_user_array,
@@ -39,7 +40,7 @@ pub fn init() {
     frame_allocator::init_frame_allocator();
     KERNEL_SPACE.lock().activate();
 }
-pub use crate::hal::arch::tlb_invalidate;
+pub use crate::hal::tlb_invalidate;
 
 #[macro_export]
 /// Convert user pointer trg to `Some(*trg)` or `None` if null.

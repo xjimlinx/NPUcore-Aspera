@@ -109,8 +109,10 @@ impl VirtAddr {
     }
     /// 计算地址在页内的偏移量
     pub fn page_offset(&self) -> usize {
-        let c = PAGE_SIZE - 1;
-        self.0 & (c)
+        {
+            let c = PAGE_SIZE - 1;
+            self.0 & (c)
+        }
     }
     /// 检查地址是否页对齐
     pub fn aligned(&self) -> bool {
@@ -227,15 +229,9 @@ impl PhysPageNum {
         PhysAddr::from((self.0 << PAGE_SIZE_BITS) + offset)
     }
     /// 获取页表项数组
-    #[cfg(feature = "loongarch64")]
     pub fn get_pte_array<T>(&self) -> &'static mut [T] {
         let pa: PhysAddr = self.clone().into();
         unsafe { core::slice::from_raw_parts_mut((pa.0) as *mut T, 512) }
-    }
-    #[cfg(feature = "riscv")]
-    pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
-        let pa: PhysAddr = self.clone().into();
-        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
     }
     /// 获取整个页的字节数组
     pub fn get_bytes_array(&self) -> &'static mut [u8] {

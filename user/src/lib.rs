@@ -43,20 +43,36 @@ extern "C" fn eh_personality() {}
 pub extern "C" fn _start() -> ! {
     #[cfg(target_arch = "loongarch64")]
     {
-        use core::arch::asm;
+        {
+            use core::arch::asm;
+            let argc: usize;
+            let argv: usize;
+            unsafe {
+                asm!(
+                    "ld.d $a0, $sp, 16",
+                    "addi.d $a1, $sp, 24",
+                    out("$a0") argc,
+                    out("$a1") argv
+                );
+            }
+            _parameter(argc, argv);
+        }
+        unreachable!();
+    }
+    #[cfg(target_arch = "riscv64")]
+    {
         let argc: usize;
         let argv: usize;
         unsafe {
-            asm!(
-                "ld.d $a0, $sp, 16",
-                "addi.d $a1, $sp, 24",
-                out("$a0") argc,
-                out("$a1") argv
+            core::arch::asm!(
+                "ld a0, 0(sp)",
+                "add a1, sp, 8",
+                out("a0") argc,
+                out("a1") argv
             );
         }
         _parameter(argc, argv);
     }
-    unreachable!();
 }
 
 #[linkage = "weak"]

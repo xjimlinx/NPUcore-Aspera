@@ -1,3 +1,15 @@
+use crate::mm::{address::*, frame_alloc, FrameTracker, MapPermission, PageTable};
+use alloc::{sync::Arc, vec::Vec};
+use bitflags::*;
+use core::arch::asm;
+use riscv::register::satp;
+
+#[inline(always)]
+pub fn tlb_invalidate() {
+    unsafe {
+        asm!("sfence.vma");
+    }
+}
 bitflags! {
     /// Page Table Entry flags
     pub struct PTEFlags: u8 {
@@ -18,22 +30,22 @@ bitflags! {
     }
 }
 
-/// RiscV Page Table Entry
+/// Page Table Entry
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct RVPageTableEntry {
+pub struct Sv39PageTableEntry {
     pub bits: usize,
 }
 
-impl RVPageTableEntry {
+impl Sv39PageTableEntry {
     const PPN_MASK: usize = ((1usize << 44) - 1) << 10;
     pub fn new(ppn: PhysPageNum, flags: PTEFlags) -> Self {
-        RVPageTableEntry {
+        Sv39PageTableEntry {
             bits: ppn.0 << 10 | flags.bits as usize,
         }
     }
     pub fn empty() -> Self {
-        RVPageTableEntry { bits: 0 }
+        Sv39PageTableEntry { bits: 0 }
     }
     pub fn ppn(&self) -> PhysPageNum {
         ((self.bits & Self::PPN_MASK) >> 10).into()
@@ -73,57 +85,26 @@ impl RVPageTableEntry {
     }
     pub fn set_permission(&mut self, flags: MapPermission) {
         self.bits = (self.bits & 0xffff_ffff_ffff_ffe1) | (flags.bits() as usize)
+        // | ((PTEFlags::A.bits() | PTEFlags::D.bits()) as usize)
     }
     pub fn set_ppn(&mut self, ppn: PhysPageNum) {
         self.bits = (self.bits & !Self::PPN_MASK) | ((ppn.0 << 10) & Self::PPN_MASK)
     }
 }
 
-pub struct RVPageTable {
+pub struct Sv39PageTable {
     root_ppn: PhysPageNum,
     frames: Vec<Arc<FrameTracker>>,
 }
 
 /// Assume that it won't encounter oom when creating/mapping.
-impl RVPageTable {
-    pub fn new() -> Self {
-        let frame = frame_alloc().unwrap();
-        RVPageTable {
-            root_ppn: frame.ppn,
-            frames: {
-                let mut vec = Vec::with_capacity(256);
-                vec.push(frame);
-                vec
-            },
-        }
-    }
-    /// Create an empty page table from `satp`
-    /// # Argument
-    /// * `satp` Supervisor Address Translation & Protection reg. that points to the physical page containing the root page.
-    pub fn from_token(satp: usize) -> Self {
-        Self {
-            root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
-            frames: Vec::new(),
-        }
-    }
-    /// Predicate for the valid bit.
-    pub fn is_mapped(&mut self, vpn: VirtPageNum) -> bool {
-        if let Some(i) = self.find_pte(vpn) {
-            if i.is_valid() {
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    }
+impl Sv39PageTable {
     /// Find the page in the page table, creating the page on the way if not exists.
     /// Note: It does NOT create the terminal node. The caller must verify its validity and create according to his own needs.
-    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut RVPageTableEntry> {
-        let idxs = vpn.indexes();
+    fn find_pte_create(&mut self, vpn: VirtPageNum) -> Option<&mut Sv39PageTableEntry> {
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
-        let mut result: Option<&mut RVPageTableEntry> = None;
+        let mut result: Option<&mut Sv39PageTableEntry> = None;
         for i in 0..3 {
             let pte = &mut ppn.get_pte_array()[idxs[i]];
             if i == 2 {
@@ -134,7 +115,10 @@ impl RVPageTable {
             }
             if !pte.is_valid() {
                 let frame = frame_alloc().unwrap();
-                *pte = RVPageTableEntry::new(frame.ppn, PTEFlags::V);
+                // xein TODO:
+                // 这里有问题
+                // *pte = Sv39PageTableEntry::new(frame.ppn, PTEFlags::V | PTEFlags::A | PTEFlags::D);
+                *pte = Sv39PageTableEntry::new(frame.ppn, PTEFlags::V);
                 self.frames.push(frame);
             }
             ppn = pte.ppn();
@@ -142,12 +126,12 @@ impl RVPageTable {
         result
     }
     /// Find the page table entry denoted by vpn, returning Some(&_) if found or None if not.
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&RVPageTableEntry> {
-        let idxs = vpn.indexes();
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&Sv39PageTableEntry> {
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
-        let mut result: Option<&RVPageTableEntry> = None;
+        let mut result: Option<&Sv39PageTableEntry> = None;
         for i in 0..3 {
-            let pte = &ppn.get_pte_array()[idxs[i]];
+            let pte = &ppn.get_pte_array::<Sv39PageTableEntry>()[idxs[i]];
             if !pte.is_valid() {
                 return None;
             }
@@ -160,12 +144,12 @@ impl RVPageTable {
         result
     }
     /// Find and return reference the page table entry denoted by `vpn`, `None` if not found.
-    fn find_pte_refmut(&self, vpn: VirtPageNum) -> Option<&mut RVPageTableEntry> {
-        let idxs = vpn.indexes();
+    fn find_pte_refmut(&self, vpn: VirtPageNum) -> Option<&mut Sv39PageTableEntry> {
+        let idxs: [usize; 3] = vpn.indexes();
         let mut ppn = self.root_ppn;
-        let mut result: Option<&mut RVPageTableEntry> = None;
+        let mut result: Option<&mut Sv39PageTableEntry> = None;
         for i in 0..3 {
-            let pte = &mut ppn.get_pte_array()[idxs[i]];
+            let pte = &mut ppn.get_pte_array::<Sv39PageTableEntry>()[idxs[i]];
             if !pte.is_valid() {
                 return None;
             }
@@ -177,37 +161,93 @@ impl RVPageTable {
         }
         result
     }
+}
+/// Assume that it won't encounter oom when creating/mapping.
+impl PageTable for Sv39PageTable {
+    fn new_kern_space() -> Self
+    where
+        Self: Sized,
+    {
+        let frame = frame_alloc().unwrap();
+        Sv39PageTable {
+            root_ppn: frame.ppn,
+            frames: {
+                let mut vec = Vec::with_capacity(256);
+                vec.push(frame);
+                vec
+            },
+        }
+    }
+    fn new() -> Self {
+        let frame = frame_alloc().unwrap();
+        Sv39PageTable {
+            root_ppn: frame.ppn,
+            frames: {
+                let mut vec = Vec::with_capacity(256);
+                vec.push(frame);
+                vec
+            },
+        }
+    }
+    /// Create an empty page table from `satp`
+    /// # Argument
+    /// * `satp` Supervisor Address Translation & Protection reg. that points to the physical page containing the root page.
+    fn from_token(satp: usize) -> Self {
+        Self {
+            root_ppn: PhysPageNum::from(satp & ((1usize << 44) - 1)),
+            frames: Vec::new(),
+        }
+    }
+    /// Predicate for the valid bit.
+    fn is_mapped(&mut self, vpn: VirtPageNum) -> bool {
+        if let Some(i) = self.find_pte(vpn) {
+            if i.is_valid() {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    /// Find the page in the page table, creating the page on the way if not exists.
+    /// Note: It does NOT create the terminal node. The caller must verify its validity and create according to his own needs.
     #[allow(unused)]
     /// Map the `vpn` to `ppn` with the `flags`.
     /// # Note
     /// Allocation should be done elsewhere.
     /// # Exceptions
     /// Panics if the `vpn` is mapped.
-    pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
+    fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: MapPermission) {
         let pte = self.find_pte_create(vpn).unwrap();
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
-        *pte = RVPageTableEntry::new(ppn, flags | PTEFlags::V);
+        *pte = Sv39PageTableEntry::new(
+            ppn,
+            // xein TODO:
+            PTEFlags::from_bits(flags.bits()).unwrap() | PTEFlags::V | PTEFlags::A | PTEFlags::D,
+            // PTEFlags::from_bits(flags.bits()).unwrap() | PTEFlags::V,
+        );
     }
     #[allow(unused)]
     /// Unmap the `vpn` to `ppn` with the `flags`.
     /// # Exceptions
     /// Panics if the `vpn` is NOT mapped (invalid).
-    pub fn unmap(&mut self, vpn: VirtPageNum) {
+    fn unmap(&mut self, vpn: VirtPageNum) {
         //tlb_invalidate();
         let pte = self.find_pte_refmut(vpn).unwrap(); // was `self.find_creat_pte(vpn).unwrap()`;
         assert!(pte.is_valid(), "vpn {:?} is invalid before unmapping", vpn);
-        *pte = RVPageTableEntry::empty();
+        *pte = Sv39PageTableEntry::empty();
     }
-    /// Translate the `vpn` into its corresponding `Some(RVPageTableEntry)` if exists
+    /// Translate the `vpn` into its corresponding `Some(PageTableEntry)` if exists
     /// `None` is returned if nothing is found.
-    pub fn translate(&self, vpn: VirtPageNum) -> Option<RVPageTableEntry> {
+    fn translate(&self, vpn: VirtPageNum) -> Option<PhysPageNum> {
         // This is not the same map as we defined just now...
         // It is the map for func. programming.
-        self.find_pte(vpn).map(|pte| pte.clone())
+        self.find_pte(vpn).map(|pte| pte.ppn())
     }
     /// Translate the virtual address into its corresponding `PhysAddr` if mapped in current page table.
     /// `None` is returned if nothing is found.
-    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+    fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
         self.find_pte(va.clone().floor()).map(|pte| {
             let aligned_pa: PhysAddr = pte.ppn().into();
             let offset = va.page_offset();
@@ -215,14 +255,19 @@ impl RVPageTable {
             (aligned_pa_usize + offset).into()
         })
     }
-    pub fn translate_refmut(&self, vpn: VirtPageNum) -> Option<&mut RVPageTableEntry> {
-        self.find_pte_refmut(vpn)
+    fn block_and_ret_mut(&self, vpn: VirtPageNum) -> Option<PhysPageNum> {
+        if let Some(pte) = self.find_pte_refmut(vpn) {
+            pte.revoke_write();
+            Some(pte.ppn())
+        } else {
+            None
+        }
     }
     /// Return the physical token to current page.
-    pub fn token(&self) -> usize {
+    fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
-    pub fn revoke_read(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
+    fn revoke_read(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.revoke_read();
             Ok(())
@@ -230,7 +275,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn revoke_write(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
+    fn revoke_write(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.revoke_write();
             Ok(())
@@ -238,7 +283,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn revoke_execute(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
+    fn revoke_execute(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.revoke_execute();
             Ok(())
@@ -246,7 +291,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn set_ppn(&mut self, vpn: VirtPageNum, ppn: PhysPageNum) -> Result<(), ()> {
+    fn set_ppn(&mut self, vpn: VirtPageNum, ppn: PhysPageNum) -> Result<(), ()> {
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.set_ppn(ppn);
             Ok(())
@@ -254,7 +299,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: MapPermission) -> Result<(), ()> {
+    fn set_pte_flags(&mut self, vpn: VirtPageNum, flags: MapPermission) -> Result<(), ()> {
         //tlb_invalidate();
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.set_permission(flags);
@@ -263,7 +308,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn clear_access_bit(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
+    fn clear_access_bit(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         tlb_invalidate();
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.clear_access();
@@ -272,7 +317,7 @@ impl RVPageTable {
             Err(())
         }
     }
-    pub fn clear_dirty_bit(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
+    fn clear_dirty_bit(&mut self, vpn: VirtPageNum) -> Result<(), ()> {
         tlb_invalidate();
         if let Some(pte) = self.find_pte_refmut(vpn) {
             pte.clear_dirty();
@@ -280,5 +325,29 @@ impl RVPageTable {
         } else {
             Err(())
         }
+    }
+    fn activate(&self) {
+        // TODO:
+        let satp = self.token();
+        // Problem in here.
+        unsafe {
+            satp::write(satp);
+            asm!("sfence.vma");
+        };
+    }
+    fn is_valid(&self, vpn: VirtPageNum) -> Option<bool> {
+        self.find_pte(vpn).map(|pte| pte.is_valid())
+    }
+    fn is_dirty(&self, vpn: VirtPageNum) -> Option<bool> {
+        self.find_pte(vpn).map(|pte| pte.is_dirty())
+    }
+    fn readable(&self, vpn: VirtPageNum) -> Option<bool> {
+        self.find_pte(vpn).map(|pte| pte.readable())
+    }
+    fn writable(&self, vpn: VirtPageNum) -> Option<bool> {
+        self.find_pte(vpn).map(|pte| pte.writable())
+    }
+    fn executable(&self, vpn: VirtPageNum) -> Option<bool> {
+        self.find_pte(vpn).map(|pte| pte.executable())
     }
 }

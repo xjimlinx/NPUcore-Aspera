@@ -12,10 +12,10 @@ use crate::drivers::BLOCK_DEVICE;
 use crate::fs::cache::BufferCache;
 use crate::fs::ext4::error::{Errno, Ext4Error};
 use crate::fs::file_trait::File;
+use crate::fs::filesystem::FS_Type;
 use crate::fs::inode::InodeTrait;
 use crate::fs::vfs::VFS;
-use crate::hal::arch::BLOCK_SZ;
-use crate::{fs::filesystem::FS_Type, hal::arch};
+use crate::hal::BLOCK_SZ;
 use alloc::{sync::Arc, vec::Vec};
 use layout::Ext4OSInode;
 use spin::Mutex;
@@ -277,6 +277,7 @@ impl Ext4FileSystem {
         // self.test_get_file("remove.lua");
         // self.test_get_file("/remove.lua");
         // self.test_get_file("/busybox_cmd.txt");
+        // self.test_get_file("/1.txt");
         // println!("Finish the test");
     }
 }

@@ -2,8 +2,7 @@
 use core::cmp::Ordering;
 use core::ops::{Add, AddAssign, Sub};
 
-use crate::hal::arch::get_clock_freq;
-pub use crate::hal::arch::get_time;
+pub use crate::hal::{get_clock_freq, get_time};
 
 use core::time::Duration;
 
@@ -22,18 +21,21 @@ pub fn get_time_sec() -> usize {
     //log::info!("[timer.rs] get_time(): {},sec: {}", get_time(), i);
     i
 }
+
 /// Return current time measured by ms.
 pub fn get_time_ms() -> usize {
     let i = get_time() / (get_clock_freq() / MSEC_PER_SEC);
     //log::info!("[timer.rs] get_time(): {},ms: {}", get_time(), i);
     i
 }
+
 /// Return current time measured by us.
 pub fn get_time_us() -> usize {
     let i = get_time() / (get_clock_freq() / USEC_PER_SEC);
     //log::info!("[timer.rs] get_time(): {},us: {}", get_time(), i);
     i
 }
+
 /// Return current time measured by nano seconds.
 pub fn get_time_ns() -> usize {
     let i = get_time() * NSEC_PER_SEC / (get_clock_freq());
@@ -181,7 +183,7 @@ impl TimeVal {
         }
     }
     pub fn to_tick(&self) -> usize {
-        self.tv_sec * get_clock_freq() + self.tv_usec * get_clock_freq() / USEC_PER_SEC
+        return self.tv_sec * get_clock_freq() + self.tv_usec * get_clock_freq() / USEC_PER_SEC;
     }
     pub fn from_s(s: usize) -> Self {
         Self {

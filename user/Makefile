@@ -7,6 +7,9 @@ endif
 ifeq ($(BOARD), laqemu)
 	TARGET := loongarch64-unknown-linux-gnu
 endif
+ifeq ($(BOARD), rvqemu)
+	TARGET := riscv64gc-unknown-none-elf
+endif
 
 
 ARCH=${shell echo ${TARGET}|cut -d- -f1 |grep -o "^[a-zA-Z]\+[[:digit:]]*"}
@@ -24,9 +27,9 @@ env:
 
 rust-user: env $(APPS)
 ifeq ($(MODE),release)
-	@cargo build --target=$(TARGET) --release
+	cargo build --target=$(TARGET) --release
 else
-	@cargo build --target=$(TARGET)
+	cargo build --target=$(TARGET)
 endif
 
 clean:

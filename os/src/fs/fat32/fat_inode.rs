@@ -55,7 +55,7 @@ macro_rules! div_ceil {
 /// The functionality of ClusLi & Inode can be merged.
 /// The struct for file information
 /// 上面这段描述可能是来自最早的文件系统实现，我也不知道怎么翻译
-pub struct Inode {
+pub struct FatInode {
     /// inode 锁: for normal operation
     inode_lock: RwLock<InodeLock>,
     /// 文件内容
@@ -74,7 +74,7 @@ pub struct Inode {
     deleted: Mutex<bool>,
 }
 
-impl Drop for Inode {
+impl Drop for FatInode {
     /// 在删除该inode之前，文件信息需要写回父目录
     fn drop(&mut self) {
         if *self.deleted.lock() {
@@ -111,7 +111,7 @@ impl Drop for Inode {
 }
 
 /// 构造函数
-impl Inode {
+impl FatInode {
     /// Inode 的构造函数
     /// # 参数
     /// + `fst_clus`: 文件的第一个簇
@@ -144,7 +144,7 @@ impl Inode {
         });
         let parent_dir = Mutex::new(parent_dir);
         let time = InodeTime::new();
-        let inode = Arc::new(Inode {
+        let inode = Arc::new(FatInode {
             inode_lock: RwLock::new(InodeLock {}),
             file_content,
             file_cache_mgr,
@@ -164,7 +164,7 @@ impl Inode {
 }
 
 /// 基本功能
-impl Inode {
+impl FatInode {
     /// 获取第一个簇
     /// # 参数
     /// + `lock`: 目标文件内容的锁
@@ -265,7 +265,7 @@ impl Inode {
 
 /// File Content Operation
 /// 文件内容操作相关方法
-impl Inode {
+impl FatInode {
     /// 分配需要的簇
     /// 需要尽可能多的分配簇，然后追加到`lock`中的`clus_list`中
     /// # 参数
@@ -344,7 +344,7 @@ impl Inode {
 }
 
 /// Directory Operation
-impl Inode {
+impl FatInode {
     /// A Constructor for `DirIter`(See `dir_iter.rs/DirIter` for details).
     /// # Arguments
     /// + `inode_lock`: The lock of inode
@@ -713,7 +713,7 @@ impl Inode {
 }
 
 /// Create
-impl Inode {
+impl FatInode {
     /// Construct short and long entries
     /// # Arguments
     /// + `parent_dir`: The pointer to parent directory
@@ -810,7 +810,7 @@ impl Inode {
 }
 
 // ls and find local
-impl Inode {
+impl FatInode {
     /// ls - General Purose file filterer
     /// # Arguments
     /// + `inode_lock`: The lock of inode
@@ -869,7 +869,7 @@ impl Inode {
     }
 }
 
-impl InodeTrait for Inode {
+impl InodeTrait for FatInode {
     /// Get self's file content lock
     /// # Return Value
     /// a lock of file content
@@ -1457,7 +1457,7 @@ impl InodeTrait for Inode {
         ent: &FATShortDirEnt,
         offset: u32,
     ) -> Arc<dyn InodeTrait> {
-        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        let parent_dir_specific = Arc::downcast::<FatInode>(parent_dir.clone()).unwrap();
         // let shit = parent_dir.clone();
         let inode = Self::from_fat_ent(&parent_dir_specific, ent, offset);
         inode
@@ -1474,7 +1474,7 @@ impl InodeTrait for Inode {
         // Self: Sized,
     {
         // let parent_dir_specific = parent_dir.as_any().downcast_ref::<Arc<Self>>().ok_or(())?;
-        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        let parent_dir_specific = Arc::downcast::<FatInode>(parent_dir.clone()).unwrap();
         // Genrate directory entries
         let (short_ent, long_ents) = Self::gen_dir_ent(
             // parent_dir,
@@ -1538,7 +1538,7 @@ impl InodeTrait for Inode {
         Self: Sized,
     {
         // 将父Inode下转为具体的Inode类型
-        let parent_dir_specific = Arc::downcast::<Inode>(parent_dir.clone()).unwrap();
+        let parent_dir_specific = Arc::downcast::<FatInode>(parent_dir.clone()).unwrap();
         // 如果父Inode是普通文件或者名称长度大于256，返回错误
         if parent_dir.is_file() || name.len() >= 256 {
             Err(())
@@ -1551,10 +1551,11 @@ impl InodeTrait for Inode {
             );
             // 如果文件类型是目录，分配第一个簇
             let fst_clus = if file_type == DiskInodeType::Directory {
-                let fst_clus = parent_dir_specific
-                    .fs
-                    .fat
-                    .alloc(&parent_dir_specific.fs.block_device, 1, None);
+                let fst_clus =
+                    parent_dir_specific
+                        .fs
+                        .fat
+                        .alloc(&parent_dir_specific.fs.block_device, 1, None);
                 // 如果分配到的第一个簇是空值，返回错误
                 if fst_clus.is_empty() {
                     return Err(());
@@ -1665,6 +1666,6 @@ impl InodeTrait for Inode {
     }
 
     fn root_inode(efs: &Arc<dyn VFS>) -> Arc<Self> {
-        Inode::root_inode(efs)
+        FatInode::root_inode(efs)
     }
 }
